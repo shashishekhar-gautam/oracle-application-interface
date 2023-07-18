@@ -1,0 +1,63 @@
+CREATE OR REPLACE PROCEDURE APPS.XXxx_REV_CQUE_UPLOAD_PROC(errbuf  OUT VARCHAR2, retcode OUT NUMBER  )                                                                   
+ AS                                                                                               
+----------------------------------------------------------------------------------------------      
+ --This Cursor retrieves all the data from staging table(HEADER)                                     
+CURSOR c                                                                                        
+     IS 
+	 SELECT *  FROM XXxx_REVERSE_CHEQUE_UPLOAD;                                                    
+-------------------------------------------------------------------------------------------      
+--Variables Declaration                                                                             
+-------------------------------------------------------------------------------------------       
+v_count   NUMBER;  
+BEGIN                                                                                               
+    FOR i IN c LOOP                                                                                 
+-- validate oracle_reference                                                                             
+      BEGIN                                                                                         
+       SELECT count(*)
+       INTO   v_count
+       FROM   XXxx_REVERSE_CHEQUE_UPLOAD                                                                          
+       WHERE  ORCALEREF=i.ORCALEREF and VENDORNAME=i.VENDORNAME;
+     EXCEPTION                                                                                      
+        WHEN NO_DATA_FOUND THEN                                                                     
+          fnd_file.put_line(FND_FILE.LOG,'No Data found for Oracle Reference');                        
+        WHEN TOO_MANY_ROWS THEN                                                                     
+          fnd_file.put_line(FND_FILE.LOG,'WENT INTO TOO MANY ROWS FOUND FOR Oracle Ref');          
+        WHEN OTHERS THEN
+         fnd_file.put_line(FND_FILE.LOG,'WENT INTO OTHERS for Oracle Ref');          
+      END;                                                                                          
+--------------------------------------------------------------------------------------------
+IF v_count=0 THEN
+    INSERT INTO XXxx_REVERSE_CHEQUE_UPLOAD                                                              
+    (   
+         ORCALEREF
+ 	,CHEQUEREF      
+        ,CDATE          
+        ,AMOUNT         
+        ,VENDORNAME 
+     )
+    VALUES                                                                                          
+	( 
+	  i.ORCALEREF
+         ,i.CHEQUEREF
+         ,i.CDATE
+         ,i.AMOUNT
+         ,VENDORNAME
+        );                                                                                          
+    ELSE   
+   UPDATE XXxx_REVERSE_CHEQUE_UPLOAD
+   SET ORCALEREF = i.ORCALEREF
+    and VENDORNAME = i.VENDORNAME;
+   --fnd_file.put_line(FND_FILE.LOG, i.ORCALEREF || ',' || i.CHEQUEREF || ',' || i.CDATE ||','||i.AMOUNT||','||i.VENDORNAME|| 'This data IS NOT valid ');                                                                          
+  END IF;                                                                                           
+END LOOP;                                                                                           
+DELETE FROM XXxx_REVERSE_CHEQUE_UPLOAD;                                                              
+COMMIT;                                                                                             
+---------------------------------------------------------------------------------------------       
+EXCEPTION                                                                                           
+    WHEN OTHERS THEN                                                                                
+      RETCODE := 1;                                                                                 
+      FND_FILE.PUT_LINE(FND_FILE.LOG, SQLERRM);  
+      DELETE FROM XXxx_REVERSE_CHEQUE_UPLOAD;                                                        
+	  COMMIT;                                                                                       
+END XXxx_REV_CQUE_UPLOAD_PROC;
+/
