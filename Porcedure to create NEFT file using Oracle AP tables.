@@ -1,0 +1,172 @@
+CREATE OR REPLACE procedure APPS.xxxx_hdfc_neft_format(x_err_buf OUT VARCHAR2
+                                                   ,x_ret_code OUT VARCHAR2
+                                                   ,p_check_date IN VARCHAR2
+                                                   ,p_bank_account IN VARCHAR2
+                                                   ,p_paycheck_run IN VARCHAR2
+                                                   )
+AS
+
+CURSOR lcu_hdfc_neft_fetch
+IS
+select  (case when aca.amount>100000 then 'R' else 'N' end) type
+         ,TRIM(TO_CHAR(aca.amount,'999999999999.99')) check_amount
+         ,to_char(aca.check_date,'DD/MM/YYYY') check_date,check_id
+from ap_checks_All aca
+where aca.STATUS_LOOKUP_CODE <> 'VOIDED'
+AND   aca.check_id in (select distinct aip.check_id
+                      from ap_invoice_payments_all aip
+                          ,ap_invoices_all aia
+                      where aia.invoice_id = aip.invoice_id
+                       and aia.source NOT like 'TERS%'
+                       and aia.source NOT like 'EERS%')
+and aca.checkrun_name = p_paycheck_run;
+--
+CURSOR lcu_hdfc_lines_fetch(p_check_id NUMBER)
+IS
+select ieb.bank_account_num_electronic
+      ,aia.description
+      ,iebb.DESCRIPTION micr
+      ,iebb.bank_branch_name_Alt IFSC
+      ,ieb.bank_name
+      ,ieb.bank_branch_name
+from ap_invoices_All aia
+   ,ap_invoice_payments_all aipa
+   ,ap_checks_All aca
+   ,IBY_EXTERNAL_BANK_ACCOUNTS_V ieb
+   ,IBY_EXT_BANK_BRANCHES_V iebb
+   ,po_vendors po
+   ,po_vendor_sites_all pos
+   ,hz_parties hp
+where aia.invoice_id = aipa.invoice_id
+and aipa.check_id = aca.check_id
+and aia.vendor_site_id = pos.vendor_site_id
+and aia.vendor_id = po.vendor_id
+and pos.vendor_id = po.vendor_id
+and po.PARTY_ID = hp.party_id
+and aca.STATUS_LOOKUP_CODE <> 'VOIDED'
+and pos.vendor_site_code_alt is not null
+and ieb.primary_acct_owner_party_id = hp.party_id
+and ieb.branch_party_id = iebb.branch_party_id
+and aia.invoice_num not like '%-TDS-%'
+AND   aca.check_id in (select distinct aip.check_id
+                      from ap_invoice_payments_all aip
+                          ,ap_invoices_all aia
+                      where aia.invoice_id = aip.invoice_id
+                       and aia.source NOT like 'TERS%'
+                       and aia.source NOT like 'EERS%')
+and aca.check_id =p_check_id;
+----
+CURSOR lcu_hdfc_bank_fetch(p_check_id NUMBER)
+IS
+select po.segment1
+       ,aca.check_id
+      ,ieb.bank_account_num_electronic
+       ,pos.vendor_site_code_alt
+      ,DECODE(INSTR(aia.invoice_num,'-TDS-'),0,aia.attribute4,NULL) TPV
+      ,DECODE(INSTR(aia.invoice_num,'-TDS-'),0,decode(aia.attribute4,null,null,aia.invoice_id),NULL) invoice_id
+      ,sum(aipa.amount) pay_amt
+      ,aca.amount check_amount
+      ,iebb.DESCRIPTION micr
+      ,iebb.bank_branch_name_Alt IFSC
+      ,ieb.bank_name
+      ,ieb.bank_branch_name
+       ,hp.email_address
+from ap_invoices_All aia
+   ,ap_invoice_payments_all aipa
+   ,ap_checks_All aca
+   ,IBY_EXTERNAL_BANK_ACCOUNTS_V ieb
+   ,IBY_EXT_BANK_BRANCHES_V iebb
+   ,po_vendors po
+   ,po_vendor_sites_all pos
+   ,hz_parties hp
+where aia.invoice_id = aipa.invoice_id
+and aipa.check_id = aca.check_id
+and aia.vendor_site_id = pos.vendor_site_id
+and aia.vendor_id = po.vendor_id
+and pos.vendor_id = po.vendor_id
+and po.PARTY_ID = hp.party_id
+and aca.STATUS_LOOKUP_CODE <> 'VOIDED'
+and pos.vendor_site_code_alt is not null
+and ieb.primary_acct_owner_party_id = hp.party_id
+and ieb.branch_party_id = iebb.branch_party_id
+and aia.invoice_num not like '%-TDS-%'
+and aca.check_id =p_check_id
+AND   aca.check_id in (select distinct aip.check_id
+                      from ap_invoice_payments_all aip
+                          ,ap_invoices_all aia
+                      where aia.invoice_id = aip.invoice_id
+                       and aia.source NOT like 'TERS%'
+                       and aia.source NOT like 'EERS%')
+group by
+po.segment1
+      ,ieb.bank_account_num_electronic
+       ,pos.vendor_site_code_alt
+      ,DECODE(INSTR(aia.invoice_num,'-TDS-'),0,aia.attribute4,NULL)
+     ,DECODE(INSTR(aia.invoice_num,'-TDS-'),0,decode(aia.attribute4,null,null,aia.invoice_id),NULL)
+      ,iebb.DESCRIPTION
+      ,iebb.bank_branch_name_Alt
+      ,ieb.bank_name
+      ,ieb.bank_branch_name
+       ,hp.email_address
+       ,aca.amount,aca.check_id;
+--
+
+lv_inv_description varchar2(2000) := NULL;
+lv_report_output   varchar2(3000) := NULL;
+ln_pay_amount  NUMBER := 0;
+ln_tds_amt     NUMBER := 0;
+
+BEGIN
+  FOR lr_hdfc_neft_fetch IN lcu_hdfc_neft_fetch
+     LOOP
+    lv_inv_description := NULL;
+    lv_report_output := NULL;
+    ln_pay_amount := 0;
+
+    EXIT WHEN lcu_hdfc_neft_fetch%NOTFOUND;
+    FOR lr_hdfc_bank_fetch IN lcu_hdfc_bank_fetch(lr_hdfc_neft_fetch.check_id)
+    LOOP
+
+       IF lr_hdfc_bank_fetch.invoice_id IS NULL THEN
+
+          ln_pay_amount := lr_hdfc_bank_fetch.check_amount;
+       ELSE
+         ln_tds_amt := 0;
+        BEGIN
+         SELECT AIP.AMOUNT
+          INTO ln_tds_amt
+         FROM AP_INVOICES_ALL AIA
+             ,AP_INVOICE_PAYMENTS_ALL AIP
+         WHERE AIA.ATTRIBUTE1 = TO_CHAR(lr_hdfc_bank_fetch.invoice_id)
+         AND AIA.INVOICE_ID = AIP.INVOICE_ID
+         AND AIP.CHECK_ID = lr_hdfc_neft_fetch.check_id
+         AND INVOICE_TYPE_LOOKUP_CODE <>'STANDARD';
+        EXCEPTION
+          when others then
+           ln_tds_amt := 0;
+        END;
+        ln_pay_amount := lr_hdfc_bank_fetch.pay_amt;
+       END IF;
+
+        ln_pay_amount := ln_pay_amount+ln_tds_amt;
+
+      FOR lr_hdfc_lines_fetch IN lcu_hdfc_lines_fetch(lr_hdfc_neft_fetch.check_id)
+        LOOP
+         lv_inv_description := substr(lv_inv_description||' '||lr_hdfc_lines_fetch.description,1,2000);
+      END LOOP;
+       BEGIN
+        select (case when ln_pay_amount>100000 then 'R' else 'N' end)||','||substr(lr_hdfc_bank_fetch.segment1,1,13)||','||substr(lr_hdfc_bank_fetch.bank_account_num_electronic,1,25)||','||TRIM(TO_CHAR(ln_pay_amount,'999999999999.99'))||','||substr(lr_hdfc_bank_fetch.vendor_site_code_alt,1,40)||','||','||','||','||','||','||','||','||','||lr_hdfc_bank_fetch.segment1||','||substr(lv_inv_description,1,30)||','||lr_hdfc_bank_fetch.TPV||','||','||','||substr(lv_inv_description,90,120)||','||substr(lv_inv_description,120,150)||','||','||','||lr_hdfc_neft_fetch.check_date||','||substr(lr_hdfc_bank_fetch.micr,1,15)||','||lr_hdfc_bank_fetch.IFSC||','||lr_hdfc_bank_fetch.bank_name||','||
+        lr_hdfc_bank_fetch.bank_branch_name||','||substr(lr_hdfc_bank_fetch.email_address,1,100)
+        INTO lv_report_output
+        from dual;
+       EXCEPTION
+        WHEN OTHERS THEN
+          lv_report_output := null;
+       END;
+        --
+        FND_FILE.PUT_LINE(FND_FILE.OUTPUT,lv_report_output);
+        --
+     END LOOP;
+  END LOOP;
+END xxxx_hdfc_neft_format;
+/
