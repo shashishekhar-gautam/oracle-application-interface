@@ -77,21 +77,10 @@ CREATE OR REPLACE PACKAGE APPS.XXxx_GL_INT_PKG AS
 -- +===========================================================================+
 -- | Name       : XXxxGLINTIMPORTSPEC.sql                                    |
 -- | Project    : GL IMPORT PROGRAM                                            |
--- | Application:                                                              |
--- | Inputs     :                                                              |
--- | Outputs    :                                                              |
--- | Database   :                                                              |
--- | Description:                                                              |
--- |                                                                           |
--- |                                                                           |
--- |                                                                           |
--- |                                                                           |
--- | Related                                                                   |
--- | Documents                                                                 |
--- |                                                                           |
+ 
 -- |Version  Date         Author             Comments                          |
 -- |=======  ===========  =================  ================================= |
--- |                      Shashi gautam       Initial Version                   |
+-- |                             Initial Version                   |
 -- |                                                                           |
 -- +===========================================================================+
 
@@ -161,7 +150,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                   Shashi gautam        Initial version.                     |
+  -- |D1a                           Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
 
@@ -195,7 +184,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                   Shashi gautam        Initial version.                     |
+  -- |D1a                           Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
 
@@ -258,7 +247,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                   Shashi gautam        Initial version.                    |
+  -- |D1a                           Initial version.                    |
   -- |                                                                              |
   -- +==============================================================================+
   PROCEDURE delete_record(
@@ -293,7 +282,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                           |
   -- |Ver.     Date         Author              Comments                         |
   -- |====     ==========  ==================  ============================      |
-  -- |D1a                  Shashi gautam        Initial version.                  |
+  -- |D1a                          Initial version.                  |
   -- |                                                                           |
   -- +===========================================================================+
   PROCEDURE validate_record(x_err_buf    OUT VARCHAR2
@@ -1451,7 +1440,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |D1a                          Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
   FUNCTION get_sob_id(p_sob IN VARCHAR2)
@@ -1483,7 +1472,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |D1a                          Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
   FUNCTION get_budget_id(p_budget_name IN VARCHAR2)
@@ -1516,7 +1505,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |D1a                          Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
   FUNCTION get_encumbrance_id(p_encumbrance_type IN VARCHAR2)
@@ -1549,7 +1538,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                  Shashi Gautam        Initial version.                     |
+  -- |D1a                          Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
 
@@ -1805,7 +1794,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |D1a                          Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
 
@@ -1854,7 +1843,7 @@ CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
   -- |                                                                              |
   -- |Ver.     Date         Author              Comments                            |
   -- |====     ==========  ==================  ============================         |
-  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |D1a                          Initial version.                     |
   -- |                                                                              |
   -- +==============================================================================+
   --+=====================================================================
