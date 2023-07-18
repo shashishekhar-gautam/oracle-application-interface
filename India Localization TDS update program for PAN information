@@ -1,0 +1,373 @@
+CREATE OR REPLACE PROCEDURE APPS.xxxx_tds_update_prog(x_err_buf  OUT VARCHAR2
+                                                  ,x_ret_code OUT VARCHAR2
+                                                  )
+IS
+
+CURSOR lcu_chk_rcd
+IS
+SELECT count(*) tcount
+FROM po_vendors pov
+    ,po_vendor_sites_all povsa
+WHERE pov.vendor_id = povsa.vendor_id
+and pov.attribute1 is not null
+and pov.attribute2 is not null
+--and pov.vendor_id not in (select vendor_id from JAI_AP_TDS_VENDOR_HDRS)
+and povsa.vendor_site_id not in (select vendor_site_id from jai_ap_tds_vendor_hdrs)
+and (pov.vendor_type_lookup_code not in ('EMPLOYEE','INDIA TDS AUTHORITY') or (pov.vendor_type_lookup_code is null));
+--
+CURSOR lcu_validate_pan(p_pan_no VARCHAR2,p_vendor_id NUMBER)
+IS
+SELECT COUNT(*) tcount
+FROM JAI_AP_TDS_VENDOR_HDRS
+WHERE pan_no = p_pan_no
+AND vendor_id = p_vendor_id;
+--
+CURSOR lcu_get_tax_id(p_tax_name VARCHAR2
+                     ,p_section_code VARCHAR2
+                     ,p_vendor_id NUMBER
+                     ,p_org_id NUMBER
+                     )
+IS
+SELECT tax_id
+      ,section_type
+      ,section_code
+FROM JAI_CMN_TAXES_ALL
+WHERE (tax_name = p_tax_name OR (p_tax_name IS NULL))
+AND tax_type = 'TDS'
+AND org_id = p_org_id
+AND (section_code = p_section_code OR (p_section_code IS NULL))
+AND  (vendor_id = p_vendor_id OR (vendor_id IS NULL));
+--
+CURSOR lcu_validate_tan(p_tan_no VARCHAR2,p_vendor_id NUMBER)
+IS
+SELECT COUNT(*) tcount
+FROM JAI_AP_TDS_VENDOR_HDRS
+WHERE tan_no = p_tan_no
+AND vendor_id <> p_vendor_id ;
+--
+CURSOR lcu_tds_fetch
+IS
+SELECT pov.vendor_id,pov.vendor_type_lookup_code
+       ,povsa.vendor_site_id
+       ,pov.attribute1 TDS_VENDOR_TYPE_LOOKUP_CODE
+       ,pov.attribute2 pan_no
+       ,pov.attribute3 TAN_NO
+       ,pov.attribute4 WARD_NO
+       ,pov.vendor_name vendor_code
+ FROM po_vendors pov
+     ,po_vendor_sites_all povsa
+ WHERE pov.vendor_id = povsa.vendor_id
+ and pov.attribute1 is not null
+ and pov.attribute2 is not null
+ --and pov.vendor_id not in (select vendor_id from JAI_AP_TDS_VENDOR_HDRS)
+ and povsa.vendor_site_id not in (select vendor_site_id from jai_ap_tds_vendor_hdrs)
+ and (pov.vendor_type_lookup_code not in ('EMPLOYEE','INDIA TDS AUTHORITY') or (pov.vendor_type_lookup_code is null));
+--
+CURSOR lcu_chk_vendor(p_vendor_name  IN VARCHAR2
+                     )
+IS
+SELECT pv.vendor_id
+FROM po_vendors pv
+WHERE UPPER(pv.vendor_name)  = UPPER(p_vendor_name) ;
+--
+CURSOR lcu_chk_vendor_site(p_vendor_site_name IN VARCHAR2
+                         ,p_vendor_id NUMBER
+                         ,p_org_id IN NUMBER
+                         )
+IS
+SELECT pvs.vendor_site_id,pvs.org_id
+FROM po_vendors pv,po_vendor_sites_all pvs
+WHERE pv.vendor_id = pvs.vendor_id
+AND   pvs.vendor_site_code = p_vendor_site_name
+AND   pvs.org_id = p_org_id
+AND   pvs.vendor_id  = p_vendor_id;
+--
+CURSOR lcu_chk_null_site_tb1(p_vendor_id NUMBER)
+IS
+SELECT COUNT(*) tcount
+FROM JAI_CMN_VENDOR_SITES
+WHERE vendor_id = p_vendor_id
+AND  vendor_site_id = 0;
+--
+CURSOR lcu_chk_null_site_tb2(p_vendor_id NUMBER)
+IS
+SELECT COUNT(*) tcount
+FROM JAI_AP_TDS_VENDOR_HDRS
+WHERE vendor_id = p_vendor_id
+AND  vendor_site_id = 0;
+--
+CURSOR lcu_chk_tds_site_tb1(p_vendor_id NUMBER
+                            ,p_vendor_site_id NUMBER
+                            )
+IS
+SELECT COUNT(*) tcount
+FROM JAI_CMN_VENDOR_SITES
+WHERE vendor_id = p_vendor_id
+AND  vendor_site_id = p_vendor_site_id;
+--
+CURSOR lcu_chk_tds_site_tb2(p_vendor_id NUMBER
+                            ,p_vendor_site_id NUMBER
+                            )
+IS
+SELECT COUNT(*) tcount
+FROM JAI_AP_TDS_VENDOR_HDRS
+WHERE vendor_id = p_vendor_id
+AND  vendor_site_id = p_vendor_site_id;
+--
+lr_chk_rcd            lcu_chk_rcd%ROWTYPE;
+lr_chk_vendor         lcu_chk_vendor%ROWTYPE;
+lr_chk_vendor_site    lcu_chk_vendor_site%ROWTYPE;
+lr_chk_null_site_tb1  lcu_chk_null_site_tb1%ROWTYPE;
+lr_chk_null_site_tb2  lcu_chk_null_site_tb1%ROWTYPE;
+lr_chk_tds_site_tb1   lcu_chk_tds_site_tb1%ROWTYPE;
+lr_chk_tds_site_tb2   lcu_chk_tds_site_tb2%ROWTYPE;
+lr_validate_pan       lcu_validate_pan%ROWTYPE;
+lr_validate_tan       lcu_validate_tan%ROWTYPE;
+lr_get_tax_id         lcu_get_tax_id%ROWTYPE;
+
+l_vendor_id NUMBER;
+ln_vendor_site_id NUMBER := 0;
+ln_tax_id NUMBER := NULL;
+ln_section_type VARCHAR2(50);
+ln_section_code VARCHAR2(50);
+l_vendor_site_id NUMBER;
+lv_ERROR_MESSAGE VARCHAR2(2000);
+lv_PROCESSED_FLAG VARCHAR2(10);
+LN_PAN_COUNT NUMBER;
+LN_PAN_NO    VARCHAR2(20);
+LN_TDS_COUNT  NUMBER := 0;
+i             NUMBER := 0;
+j             NUMBER := 0;
+lv_ERROR_MESSAGE_G VARCHAR2(4000);
+
+BEGIN
+  OPEN lcu_chk_rcd;
+  FETCH lcu_chk_rcd INTO lr_chk_rcd;
+  CLOSE lcu_chk_rcd;
+    IF lr_chk_rcd.tcount >0 THEN
+       lv_ERROR_MESSAGE_G := NULL;
+      FOR lr_tds_fetch IN lcu_tds_fetch
+        LOOP
+         EXIT WHEN lcu_tds_fetch%NOTFOUND;
+          ln_tax_id := NULL;
+          --
+          ln_section_code := NULL;
+          --
+          ln_vendor_site_id := 0;
+          --
+          lv_ERROR_MESSAGE := NULL;
+
+          --
+                IF LENGTH(lr_tds_fetch.pan_no) <> 10 THEN
+                    lv_ERROR_MESSAGE := lv_ERROR_MESSAGE||'Pan No should be of 10 digit';
+                ELSE
+                  BEGIN
+                    LN_PAN_COUNT := NULL;
+                        --
+                        SELECT COUNT(DISTINCT PAN_NO)
+                        INTO LN_PAN_COUNT
+                        FROM JAI_AP_TDS_VENDOR_HDRS
+                        WHERE VENDOR_ID = lr_tds_fetch.vendor_id;
+                        --
+                        IF LN_PAN_COUNT = 1 THEN
+                        --
+                        SELECT DISTINCT PAN_NO
+                        INTO LN_PAN_NO
+                        FROM JAI_AP_TDS_VENDOR_HDRS
+                        WHERE VENDOR_ID = lr_tds_fetch.vendor_id;
+                        --
+                        ELSIF LN_PAN_COUNT = 0 THEN
+                          LN_PAN_NO := lr_tds_fetch.pan_no;
+                        ELSE
+                          lv_ERROR_MESSAGE := lv_ERROR_MESSAGE||'Pan No is Inconsistent';
+                        END IF;
+                    EXCEPTION
+                       WHEN OTHERS THEN
+                        lv_ERROR_MESSAGE := lv_ERROR_MESSAGE||NULL;
+                    END;
+                     IF (LN_PAN_NO <> lr_tds_fetch.pan_no) THEN
+                       lv_ERROR_MESSAGE := lv_ERROR_MESSAGE||'Pan No Provided is different from Existing Vendor Pan No';
+                     END IF;
+
+                END IF;
+                --
+                  BEGIN
+                    SELECT COUNT(*)
+                    INTO LN_TDS_COUNT
+                    FROM FND_LOOKUP_VALUES_VL
+                    WHERE lookup_type = 'JAI_TDS_VENDOR_TYPE'
+                    AND  LOOKUP_CODE = lr_tds_fetch.TDS_VENDOR_TYPE_LOOKUP_CODE;
+                  EXCEPTION
+                    WHEN OTHERS THEN
+                     LN_TDS_COUNT := 0;
+                  END;
+                  --
+                  IF LN_TDS_COUNT = 0 THEN
+                    lv_ERROR_MESSAGE := lv_ERROR_MESSAGE||'TDS_VENDOR_TYPE_LOOKUP_CODE is INVALID';
+                    lv_PROCESSED_FLAG := 'E';
+                  END IF;
+
+            ---
+            IF lv_ERROR_MESSAGE IS NULL THEN
+
+              --check for existing of NuLL Site Record For Vendor ----------
+
+              OPEN lcu_chk_null_site_tb1(lr_tds_fetch.vendor_id);
+              FETCH lcu_chk_null_site_tb1 INTO lr_chk_null_site_tb1;
+              CLOSE lcu_chk_null_site_tb1;
+
+                IF lr_chk_null_site_tb1.Tcount = 0 THEN
+                  INSERT INTO  JAI_CMN_VENDOR_SITES
+                                                  (
+                                                   VENDOR_ID,
+                                                   VENDOR_SITE_ID,
+                                                   CREATION_DATE,
+                                                   CREATED_BY,
+                                                   APPROVED_INVOICE_FLAG
+                                                   )
+                                              VALUES
+                                                   (lr_tds_fetch.vendor_id
+                                                    ,0
+                                                    ,SYSDATE
+                                                    ,fnd_global.user_id
+                                                    ,'Y'
+                                                    );
+                COMMIT;
+                --
+
+                ELSE
+                  lv_ERROR_MESSAGE := 'Null Site alreadey exist for this vendor';
+                  lv_PROCESSED_FLAG := 'E';
+
+                END IF;
+                OPEN lcu_chk_null_site_tb2(lr_tds_fetch.vendor_id);
+                FETCH lcu_chk_null_site_tb2 INTO lr_chk_null_site_tb2;
+                CLOSE lcu_chk_null_site_tb2;
+                IF lr_chk_null_site_tb2.Tcount = 0 THEN
+                  INSERT INTO JAI_AP_TDS_VENDOR_HDRS
+                           (
+                            VENDOR_ID,
+                            VENDOR_SITE_ID,
+                            PAN_NO,
+                            TAN_NO,
+                            WARD_NO,
+                            CREATION_DATE,
+                            CREATED_BY,
+                            CONFIRM_PAN_FLAG,
+                            TDS_VENDOR_TYPE_LOOKUP_CODE
+                            )
+                      VALUES(lr_tds_fetch.vendor_id
+                            ,0
+                            ,lr_tds_fetch.pan_no
+                            ,lr_tds_fetch.tan_no
+                            ,lr_tds_fetch.ward_no
+                            ,SYSDATE
+                            ,fnd_global.user_id
+                           ,'Y'
+                           ,lr_tds_fetch.tds_vendor_type_lookup_code
+                           ) ;
+                   COMMIT;
+                   --
+
+                ELSE
+                  lv_ERROR_MESSAGE := lv_ERROR_MESSAGE||',Null Site alreadey exist for this vendor in JAI_AP_TDS_VENDOR_HDRS';
+                  lv_PROCESSED_FLAG := 'E';
+
+                END IF;
+
+                     OPEN lcu_chk_tds_site_tb1(lr_tds_fetch.vendor_id,lr_tds_fetch.vendor_site_id);
+                      FETCH lcu_chk_tds_site_tb1 INTO lr_chk_tds_site_tb1;
+                      CLOSE lcu_chk_tds_site_tb1;
+
+                        IF lr_chk_tds_site_tb1.tcount = 0 THEN
+                          OPEN lcu_chk_null_site_tb1(lr_tds_fetch.vendor_id);
+                          FETCH lcu_chk_null_site_tb1 INTO lr_chk_null_site_tb1;
+                          CLOSE lcu_chk_null_site_tb1;
+                            IF lr_chk_null_site_tb1.tcount = 1 THEN
+
+
+                          INSERT INTO  JAI_CMN_VENDOR_SITES
+                                                  (
+                                                   VENDOR_ID,
+                                                   VENDOR_SITE_ID,
+                                                   CREATION_DATE,
+                                                   CREATED_BY,
+                                                   APPROVED_INVOICE_FLAG
+                                                   )
+                                              VALUES
+                                                   (lr_tds_fetch.vendor_id
+                                                    ,lr_tds_fetch.vendor_site_id
+                                                    ,SYSDATE
+                                                    ,fnd_global.user_id
+                                                    ,'Y'
+                                                    );
+                             COMMIT;
+
+                            END IF;
+                          ELSE
+                            lv_ERROR_MESSAGE := 'TDS site alreadey exist for this vendor';
+
+                          END IF;
+                       --
+                       OPEN lcu_chk_tds_site_tb2(lr_tds_fetch.vendor_id,lr_tds_fetch.vendor_site_id);
+                       FETCH lcu_chk_tds_site_tb2 INTO lr_chk_tds_site_tb2;
+                       CLOSE lcu_chk_tds_site_tb2;
+                        IF lr_chk_tds_site_tb2.tcount = 0 THEN
+                          OPEN lcu_chk_null_site_tb2(lr_tds_fetch.vendor_id);
+                          FETCH lcu_chk_null_site_tb2 INTO lr_chk_null_site_tb2;
+                          CLOSE lcu_chk_null_site_tb2;
+
+                            IF lr_chk_null_site_tb2.tcount = 1 THEN
+
+                              INSERT INTO JAI_AP_TDS_VENDOR_HDRS
+                                                               (
+                                                                  VENDOR_ID,
+                                                                  VENDOR_SITE_ID,
+                                                                  PAN_NO,
+                                                                  TAN_NO,
+                                                                  WARD_NO,
+                                                                  CREATION_DATE,
+                                                                  CREATED_BY,
+                                                                  SECTION_CODE,
+                                                                  CONFIRM_PAN_FLAG,
+                                                                  TDS_VENDOR_TYPE_LOOKUP_CODE
+                                                                 )
+                                                       VALUES(lr_tds_fetch.vendor_id
+                                                             ,lr_tds_fetch.vendor_site_id
+                                                             ,lr_tds_fetch.pan_no
+                                                             ,lr_tds_fetch.tan_no
+                                                             ,lr_tds_fetch.ward_no
+                                                             ,SYSDATE
+                                                             ,fnd_global.user_id
+                                                             ,ln_section_code
+                                                             ,NULL
+                                                             ,lr_tds_fetch.tds_vendor_type_lookup_code
+                                                             );
+                                              COMMIT;
+
+                            i := i+1;
+                            FND_FILE.PUT_LINE (FND_FILE.OUTPUT,lr_tds_fetch.VENDOR_CODE||'- '||lr_tds_fetch.VENDOR_ID||'- '||lr_tds_fetch.VENDOR_SITE_ID);
+                            END IF;
+                        ELSE
+                          lv_ERROR_MESSAGE := lv_ERROR_MESSAGE||'TDS site alreadey exist for this vendor';
+
+                        END IF;
+              ELSE
+                 j := j+1;
+                --
+
+                FND_FILE.PUT_LINE (FND_FILE.LOG,lr_tds_fetch.VENDOR_CODE||'- '||lr_tds_fetch.VENDOR_ID||'- '||lr_tds_fetch.VENDOR_SITE_ID||chr(10)||lv_ERROR_MESSAGE);
+
+             END IF;
+          END LOOP;
+             IF j>=0 THEN
+               FND_FILE.PUT_LINE(FND_FILE.LOG,'Total Number of Vendor TDS not Updated = '||j);
+
+             END IF;
+             --
+             IF i>=0 THEN
+               FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'Total Number of Vendor TDS Updated = '||i);
+
+             END IF;
+        END IF;
+END xxxx_tds_update_prog;
