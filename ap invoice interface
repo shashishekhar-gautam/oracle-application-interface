@@ -1,0 +1,1186 @@
+CREATE OR REPLACE PACKAGE APPS.xx_ap_interface_pkg AS
+	PROCEDURE RUN(x_err_buf  OUT VARCHAR2
+               ,x_ret_code OUT VARCHAR2
+               ,p_file IN VARCHAR2
+               ,p_source   IN  VARCHAR2
+               );
+        --
+
+        PROCEDURE main(x_err_buf  OUT VARCHAR2
+                      ,x_ret_code OUT VARCHAR2
+                      ,p_source   IN  VARCHAR2
+                      );
+END xx_ap_interface_pkg ;
+/
+
+
+
+CREATE OR REPLACE PACKAGE BODY APPS.xx_ap_interface_pkg
+AS
+
+PROCEDURE extract_record(p_file IN VARCHAR2
+                        )
+  IS
+  ln_request_id  NUMBER(20);
+  lb_wait        BOOLEAN;
+  lc_phase       VARCHAR2(20);
+  lc_status      VARCHAR2(20);
+  lc_dev_phase   VARCHAR2(20);
+  lc_dev_status  VARCHAR2(20);
+  lc_message     VARCHAR2(20);
+  lc_error_msg   VARCHAR2(200);
+
+  BEGIN
+    ln_request_id := 0;
+    --
+    ln_request_id := FND_REQUEST.SUBMIT_REQUEST('SQLAP'
+                                             ,'BSLIAPINVIMPCONTROL'
+                                             ,''
+                                             ,''
+                                             ,FALSE
+                                             ,p_file
+                                             );
+    COMMIT;
+    IF ln_request_id <> 0 THEN
+      lb_wait := FND_CONCURRENT.WAIT_FOR_REQUEST(ln_request_id
+                                       ,10
+                                    ,30
+                                    ,lc_phase
+                                    ,lc_status
+                                    ,lc_dev_phase
+                                    ,lc_dev_status
+                                    ,lc_message
+                                                );
+    END IF;
+  EXCEPTION
+    WHEN OTHERS THEN
+      lc_error_msg := SQLERRM;
+      FND_FILE.PUT_LINE(FND_FILE.LOG,lc_error_msg);
+  END extract_record;
+
+---
+
+PROCEDURE main(x_err_buf  OUT VARCHAR2
+               ,x_ret_code OUT VARCHAR2
+               ,p_source   IN  VARCHAR2
+               )
+AS
+  --
+  -- Local Variable Declaration
+  --
+          ln_invoice_id_h         NUMBER;
+          ln_invoice_id_l         NUMBER;
+          ln_vendor_id            po_vendors.vendor_id%TYPE;
+          ln_vendor_SITE_id       po_vendor_SITES_all.vendor_SITE_id%TYPE;
+          ln_terms_id             ap_terms.term_id%TYPE;
+          lc_terms_name       ap_terms.name%TYPE;
+          lc_error_flag           CHAR(1) := 'N';
+          ld_invoice_date         VARCHAR2(25);--ap_invoices_all.invoice_date%Type;
+          ld_gl_date          VARCHAR2(25);--ap_invoices_all.gl_date%Type;
+          lc_vendor_name          po_vendors.vendor_name%TYPE;
+          lc_vendor_num           po_vendors.segment1%TYPE;
+          lc_vendor_SITE_code po_vendor_SITES_all.VENDOR_SITE_CODE%TYPE;
+          lc_INVOICE_CURRENCY_CODE ap_invoices_all.INVOICE_CURRENCY_CODE%TYPE;
+          lc_exchange_rate    VARCHAR2(50);--ap_invoices_all.exchange_rate%Type;
+
+          ln_code_combination_id  NUMBER;
+          ln_ou                                   NUMBER;
+          ln_set_of_books_id              NUMBER;
+          ln_laibility_ccid NUMBER;
+          ln_invoice_amount NUMBER :=0;
+          lc_exchange_rate_type VARCHAR2(25);
+          LC_DESCRIPTION VARCHAR2(240);
+          lc_DIST_CODE_CONCATENATED VARCHAR2(60);
+          lc_prepayment_account VARCHAR2(60);
+          lc_attribute15 VARCHAR2(50);
+          lc_attribute15_ccid NUMBER :=0;
+          ln_inv_count   NUMBER := 0;
+          ln_line_count  NUMBER := 0;
+          lc_err_msg     VARCHAR2(3000);
+          LN_RECD_COUNT  NUMBER := 0;
+          LN_PREPAY_AMT_1 NUMBER := 0;
+          LN_PREPAY_AMT_2 NUMBER := 0;
+          LN_PRE_APP_AMT  NUMBER := 0;
+          LN_COA_ID       NUMBER := 0;
+          LN_CCD_ID       NUMBER := 0;
+          ln_line_amt     NUMBER := 0;
+          LN_EXTACCT_ID   NUMBER;
+          LV_PAY_CODE     VARCHAR2(30);
+          ln_vendor_type VARCHAR2(30);
+          ln_pay_group   VARCHAR2(25);
+          LN_INV_CHECK   NUMBER;
+          LV_INV_LUKUP   varchar2(100);
+          LV_ACCT_CHECK  VARCHAR2(100);
+          l_PREPAY_DIST_NUM VARCHAR2(50):= NULL; ---to be fetched
+          l_LINE_TYPE_LOOKUP_CODE VARCHAR2(250):= NULL;---to be fetched
+         ln_global_1   number;
+         ln_global_2   number;
+         LN_PERSON_ID  NUMBER;
+         LV_STATUS_CHECK  VARCHAR2(100);
+         ln_invoice_amt   NUMBER;
+  --
+  -- Invoice Header Information getting
+  --
+          CURSOR c_header_inf(p_source IN VARCHAR2)
+          IS
+          SELECT DISTINCT VENDOR_NAME,INVOICE_NUM,VENDOR_SITE_CODE,VENDOR_NUM,INVOICE_AMOUNT,gl_date
+             , operating_unit,INVOICE_DATE,INVOICE_TYPE_LOOKUP_CODE,DOC_CATEGORY_CODE,ORG_ID
+             ,PREPAY_NUM,PREPAY_APPLY_AMOUNT,INVOICE_INCLUDES_PREPAY_FLAG,prepay_gl_date,PAY_GROUP_LOOKUP_CODE,
+         attribute_category,attribute4,attribute5,attribute6,attribute7,attribute8,attribute9,attribute10,PAYMENT_METHOD_LOOKUP_CODE,source
+          FROM xx_AP_INVOICE_STAGING
+          WHERE interface_status IS NULL
+          AND   upper(trim(SOURCE)) = upper(trim(p_source));
+  -- Invoice Lines Information getting
+  --
+          CURSOR c_lines_inf(p_VENDOR_NAME VARCHAR2,p_INVOICE_NUM VARCHAR2,p_VENDOR_SITE_CODE_code VARCHAR2,p_VENDOR_NUM VARCHAR2,p_source IN VARCHAR2)
+          IS
+          SELECT DISTINCT *
+          FROM xx_AP_INVOICE_STAGING
+          WHERE VENDOR_NAME = p_VENDOR_NAME
+          AND INVOICE_NUM  = p_INVOICE_NUM
+          AND VENDOR_SITE_CODE = p_VENDOR_SITE_CODE_code
+          AND VENDOR_NUM = p_VENDOR_NUM
+          AND interface_status IS NULL
+          AND upper(trim(SOURCE)) = upper(trim(p_source));
+
+          --
+          CURSOR LC_PREPAYMENT_CHECK
+          IS
+          SELECT DISTINCT vendor_id
+          FROM AP_INVOICES_INTERFACE
+          WHERE SOURCE like '%MIGRATION%'
+          AND STATUS IS NULL;
+          --
+          CURSOR lc_loaded_supplier(p_source IN VARCHAR2)
+          IS
+          SELECT DISTINCT AI.INVOICE_NUM,AI.VENDOR_NUM,AI.INVOICE_DATE,AI.VENDOR_SITE_CODE,POV.VENDOR_NAME,AI.source
+          FROM AP_INVOICES_INTERFACE ai
+              ,ap_invoice_lines_interface ail
+              ,PO_VENDORS POV
+          WHERE ai.SOURCE like  p_source||'%MIGRATION%'
+          AND  ai.invoice_id = ail.invoice_id
+          AND AI.VENDOR_ID = POV.VENDOR_ID
+          AND ai.STATUS IS NULL;
+--
+BEGIN
+  --
+  -- Updating Interface status flag  message to NULL
+  --
+
+  DELETE FROM xx_AP_INVOICE_STAGING
+  WHERE interface_status = 'E'
+  AND ERROR_MESSAGE IS NOT NULL;
+  --
+  DELETE FROM AP_INVOICES_INTERFACE
+  WHERE SOURCE LIKE '%MIGRATION%'
+  AND INVOICE_ID NOT IN (SELECT DISTINCT INVOICE_ID FROM AP_INVOICE_LINES_INTERFACE);
+  --
+  --COMMIT;
+  FOR i IN c_header_inf(p_source)
+  LOOP
+  --
+  -- Initializations
+  --
+          lc_error_flag := 'N';
+          lc_err_msg := null;
+          LN_INV_CHECK := 0;
+          ln_invoice_amt := i.invoice_amount;
+  --
+    IF i.VENDOR_NAME is NULL THEN
+       lc_err_msg := lc_err_msg||'Vendor Name Cannot be Null, ';
+       lc_error_flag := 'Y';
+    END IF;
+    --
+    IF i.VENDOR_NUM is NULL THEN
+       lc_err_msg := lc_err_msg||'Vendor Number Cannot be Null, ';
+       lc_error_flag := 'Y';
+    END IF;
+    --
+    IF i.VENDOR_SITE_CODE IS NULL THEN
+      lc_err_msg := lc_err_msg||'Vendor Site Cannot be Null, ';
+      lc_error_flag := 'Y';
+    END IF;
+
+  -- Invoice Id fetching
+  --
+          SELECT ap_invoices_interface_s.NEXTVAL
+          INTO ln_invoice_id_h
+          FROM dual;
+
+      IF i.INVOICE_NUM IS NULL THEN
+         lc_error_flag := 'Y';
+         lc_err_msg := lc_err_msg||'Invoice Number Can not be Null,';
+      END IF;
+  --
+  -- Org Id Fetching
+  --
+       IF lc_error_flag <> 'Y' THEN
+          BEGIN
+                  SELECT organization_id,set_of_books_id
+                  INTO ln_ou,ln_set_of_books_id
+                  FROM hr_operating_units    --hr_all_organization_units_tl
+                  WHERE name = decode(i.OPERATING_UNIT,'BSLI','Birla Sun Life Insurance Company Limited',null);
+          EXCEPTION
+                  WHEN OTHERS THEN
+                          UPDATE xx_AP_INVOICE_STAGING
+                          SET interface_status = 'E',
+                              error_message = lc_err_msg||'Error occured while fetching Organization Id'
+                          WHERE VENDOR_NAME = i.VENDOR_NAME
+                      AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE
+                      AND INVOICE_NUM = i.INVOICE_NUM;
+                          lc_error_flag := 'Y';
+                          lc_err_msg := lc_err_msg||'Error occured while fetching Organization Id,';
+          END;
+       END IF;
+       --
+      IF lc_error_flag <> 'Y' THEN
+         BEGIN
+          SELECT INVOICE_ID
+          INTO LN_INV_CHECK
+          FROM AP_INVOICES_ALL aia
+              ,po_vendors pov
+              ,po_vendor_sites_all povsa
+          WHERE aia.invoice_num = i.INVOICE_NUM
+          AND aia.vendor_id = pov.vendor_id
+          AND pov.vendor_id =povsa.vendor_id
+          AND UPPER(trim(povsa.VENDOR_SITE_CODE)) = UPPER(trim(i.VENDOR_SITE_CODE))
+          AND pov.segment1 = i.vendor_num;
+
+        Exception
+          when others then
+              LN_INV_CHECK := 0;
+        END;
+      END IF;
+      --
+      IF LN_INV_CHECK <> 0 THEN
+        lc_error_flag := 'Y';
+        lc_err_msg := lc_err_msg||'Invoice Already Exist in Oracle,';
+      END IF;
+      --
+      BEGIN
+        SELECT LOOKUP_CODE
+        INTO LV_INV_LUKUP
+        FROM FND_LOOKUP_VALUES_VL
+        WHERE lookup_type = 'INVOICE TYPE'
+        AND   lookup_code = trim(upper(i.INVOICE_TYPE_LOOKUP_CODE));
+      EXCEPTION
+        WHEN OTHERS THEN
+          LV_INV_LUKUP := NULL;
+         lc_error_flag := 'Y';
+         lc_err_msg := lc_err_msg||'Invalid INVOICE_TYPE_LOOKUP_CODE ,';
+      END;
+     --
+
+  --
+  -- Invoice Date fetching
+  --
+       IF lc_error_flag <> 'Y' THEN
+                  BEGIN
+                          SELECT DISTINCT
+                          invoice_date
+                          ,gl_date
+                          ,INVOICE_CURRENCY_CODE
+                          ,exchange_rate
+                          ,INVOICE_description
+                          INTO ld_invoice_date
+                          ,ld_gl_date
+                          ,lc_INVOICE_CURRENCY_CODE
+                          ,lc_exchange_rate
+                          ,lc_description
+                          FROM xx_AP_INVOICE_STAGING
+                          WHERE VENDOR_NUM  = i.VENDOR_NUM
+                          AND TRIM(VENDOR_SITE_CODE) = TRIM(i.VENDOR_SITE_CODE)
+                          AND INVOICE_NUM = i.INVOICE_NUM
+                          AND operating_unit  = i.operating_unit
+                          AND INTERFACE_STATUS IS NULL;
+                  EXCEPTION
+                          WHEN NO_DATA_FOUND THEN
+                                  UPDATE xx_AP_INVOICE_STAGING
+                                  SET interface_status = 'E',
+                                  error_message = 'Invoice Data is not consistent.'
+                                  WHERE VENDOR_NUM = i.VENDOR_NUM
+                                  AND INVOICE_NUM  = i.INVOICE_NUM
+                                  AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE
+                                  AND operating_unit  = i.operating_unit;
+                                  lc_error_flag := 'Y';
+                                  --
+                                  lc_err_msg := lc_err_msg||' Invoice Data is not consistent,';
+                  WHEN OTHERS THEN
+                          UPDATE xx_AP_INVOICE_STAGING
+                          SET interface_status = 'E',
+                          error_message = 'Error while fetching invoice data'
+                          WHERE VENDOR_NUM = i.VENDOR_NUM
+                          AND INVOICE_NUM  = i.INVOICE_NUM
+                          AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE
+                          AND operating_unit  = i.operating_unit;
+
+                          lc_error_flag := 'Y';
+                          lc_err_msg := lc_err_msg||' Error while fetching invoice data,';
+                  END;
+       END IF;
+  --
+  -- Vendor Id fetching
+  --
+       IF lc_error_flag <> 'Y' THEN
+                  BEGIN
+                          SELECT pv.vendor_id
+                          ,pv.vendor_name
+                          ,segment1 vendor_num
+                          INTO ln_vendor_id
+                          ,lc_vendor_name
+                          ,lc_vendor_num
+                          FROM po_vendors PV
+                          WHERE UPPER(trim(PV.vendor_name)) = UPPER(trim(i.VENDOR_NAME))
+                          AND   PV.segment1 = i.vendor_num;
+
+                  EXCEPTION
+                          WHEN NO_DATA_FOUND THEN
+                                  UPDATE xx_AP_INVOICE_STAGING
+                                  SET interface_status = 'E',
+                                  error_message = 'Vendor Name does not exists.'
+                                  WHERE VENDOR_NAME = i.VENDOR_NAME
+                                  AND INVOICE_NUM  = i.INVOICE_NUM
+                                  AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE
+                                  AND vendor_num = i.vendor_num;
+                                  lc_error_flag := 'Y';
+                                  lc_err_msg := lc_err_msg||' Vendor not exists,';
+                  WHEN OTHERS THEN
+                          UPDATE xx_AP_INVOICE_STAGING
+                          SET interface_status = 'E',
+                          error_message = 'Error while fetching Vendor Id.'
+                          WHERE VENDOR_NAME = i.VENDOR_NAME
+                          AND INVOICE_NUM  = i.INVOICE_NUM
+                          AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE
+                          AND vendor_num = i.vendor_num;
+                          lc_error_flag := 'Y';
+                          lc_err_msg := lc_err_msg||' Error while fetching Vendor Id,';
+                  END;
+       END IF;
+       --
+  -- Vendor VENDOR_SITE_CODE Id fetching
+  --
+       IF lc_error_flag <> 'Y' THEN
+               BEGIN
+                          SELECT PVSA.vendor_SITE_ID
+                          ,PVSA.vendor_SITE_CODE
+                          INTO ln_vendor_SITE_id
+                          ,lc_vendor_SITE_code
+                          FROM po_vendor_SITEs_all PVSA
+                          , po_vendors PV
+                          WHERE PV.vendor_id                = PVSA.vendor_id
+                          AND UPPER(trim(PV.vendor_name)) = UPPER(trim(i.VENDOR_NAME))
+                          AND UPPER(PVSA.vendor_SITE_code) = UPPER(i.VENDOR_SITE_CODE)
+                          AND pv.segment1 = i.vendor_num
+                          AND org_id = ln_ou;
+               EXCEPTION
+                  WHEN NO_DATA_FOUND THEN
+                          UPDATE xx_AP_INVOICE_STAGING
+                          SET interface_status = 'E',
+                          error_message    = 'Vendor VENDOR_SITE_CODE Id not exists.'
+                          WHERE VENDOR_NAME     = i.VENDOR_NAME
+                          AND INVOICE_NUM  = i.INVOICE_NUM
+                          AND VENDOR_SITE_CODE            = i.VENDOR_SITE_CODE
+                          AND vendor_num = i.vendor_num;
+                          lc_error_flag := 'Y';
+                          lc_err_msg := lc_err_msg||' Vendor VENDOR_SITE_CODE Id not exists,';
+                  WHEN OTHERS THEN
+                          UPDATE xx_AP_INVOICE_STAGING
+                          SET interface_status = 'E',
+                          error_message    = 'Error while fetching vendor VENDOR_SITE_CODE id.'
+                          WHERE VENDOR_NAME     = i.VENDOR_NAME
+                          AND INVOICE_NUM  = i.INVOICE_NUM
+                          AND VENDOR_SITE_CODE                    = i.VENDOR_SITE_CODE
+                          AND vendor_num = i.vendor_num;
+                          lc_error_flag := 'Y';
+                          lc_err_msg := lc_err_msg||' Error while fetching vendor VENDOR_SITE_CODE id,';
+                  END;
+       END IF;
+  --
+  -- Term Id fetching
+  --
+       IF lc_error_flag <> 'Y' THEN
+                  BEGIN
+                          SELECT pvsa.terms_id
+                          ,apt.name
+                          INTO ln_terms_id
+                          ,lc_terms_name
+                          FROM po_vendor_SITEs_all PVSA
+                          , po_vendors PV
+                          , ap_terms apt
+                          WHERE PV.vendor_id = PVSA.vendor_id
+                          AND UPPER(trim(PV.vendor_name)) = UPPER(trim(i.VENDOR_NAME))
+                          AND UPPER(PVSA.vendor_SITE_code) = UPPER(i.VENDOR_SITE_CODE)
+                          AND pvsa.terms_id = apt.term_id
+                          AND org_id = ln_ou
+                          AND pv.segment1 = i.vendor_num;
+                  EXCEPTION
+                  WHEN OTHERS THEN
+
+                          lc_err_msg := lc_err_msg||NULL;
+                  END;
+       END IF;
+            IF i.INVOICE_TYPE_LOOKUP_CODE = 'PREPAYMENT' THEN
+                  ln_terms_id := 10000;
+                  lc_terms_name := 'Immediate';
+            ELSE
+                  ln_terms_id := ln_terms_id;
+                  lc_terms_name := lc_terms_name;
+            END IF;
+
+  IF lc_error_flag <> 'Y' THEN
+          ln_invoice_amount := 0;
+          ln_inv_count := ln_inv_count+1;
+      ---
+      BEGIN
+        SELECT VENDOR_TYPE_LOOKUP_CODE
+        INTO ln_vendor_type
+        FROM PO_VENDORS
+        WHERE VENDOR_NAME = lc_vendor_name
+        AND segment1 = i.vendor_num;
+      EXCEPTION
+        WHEN OTHERS THEN
+         ln_vendor_type := NULL;
+      END;
+
+      --
+      IF ln_vendor_type <> 'EMPLOYEE' OR ln_vendor_type is NULL THEN
+      BEGIN
+        SELECT ieb.EXT_BANK_ACCOUNT_ID
+        INTO  LN_EXTACCT_ID
+        FROM IBY_ACCOUNT_OWNERS IAO
+            ,PO_VENDORS PV
+            ,iby_ext_bank_accounts ieb
+            ,iby_ext_bank_branches_v iebb
+        WHERE PV.party_id             = IAO.account_owner_party_id
+         and  iao.ext_bank_account_id = ieb.ext_bank_account_id
+         and  ieb.branch_id  = iebb.branch_party_id
+         and  iebb.bank_branch_name_alt is not null
+         AND   PV.vendor_name = lc_vendor_name
+         AND   pv.segment1 = i.vendor_num ;
+
+      EXCEPTION
+        WHEN OTHERS THEN
+          LN_EXTACCT_ID := 0;
+      END;
+      --
+      IF LN_EXTACCT_ID <> 0 AND LN_EXTACCT_ID IS NOT NULL THEN
+        LV_PAY_CODE := 'NEFT';
+        ln_pay_group := 'NEFT';
+      ELSE
+          LV_PAY_CODE  := NULL;
+          ln_pay_group := NULL;
+      END IF;
+     END IF;
+      --
+    IF ln_vendor_type = 'EMPLOYEE' THEN
+        BEGIN
+         SELECT paf.attribute1
+         INTO LV_ACCT_CHECK
+         FROM per_all_people_f paf
+             ,po_vendors pov
+         WHERE pov.employee_id = paf.person_id
+         AND  pov.vendor_name = lc_vendor_name
+         AND  pov.segment1  =  i.vendor_num
+         AND  paf.attribute3 IS NOT NULL;
+         EXCEPTION
+           WHEN OTHERS THEN
+              LV_ACCT_CHECK := NULL;
+         END;
+         --
+         BEGIN
+         SELECT nvl(upper(paf.attribute5),'X')
+         INTO LV_STATUS_CHECK
+         FROM per_all_people_f paf
+             ,po_vendors pov
+         WHERE pov.employee_id = paf.person_id
+         AND  pov.vendor_name = lc_vendor_name
+         AND  pov.segment1  =  i.vendor_num
+         AND  paf.attribute3 IS NOT NULL;
+         EXCEPTION
+           WHEN OTHERS THEN
+
+              LV_STATUS_CHECK := NULL;
+        END;
+        --
+        IF LV_ACCT_CHECK IS NOT NULL THEN
+         IF LV_STATUS_CHECK <> 'INACTIVE' THEN
+
+           IF upper(substr(LV_ACCT_CHECK,1,4)) = 'HDFC' THEN
+             ln_pay_group := 'EMP - HDFC';
+             LV_PAY_CODE :=  'EFT';
+           ELSIF upper(substr(LV_ACCT_CHECK,1,3)) = 'SBI' THEN
+              ln_pay_group := 'EMP - SBI';
+              LV_PAY_CODE :=  'EFT';
+           ELSIF upper(substr(LV_ACCT_CHECK,1,4)) = 'CITI' THEN
+               ln_pay_group := 'EMP - CITI';
+                LV_PAY_CODE :=  'EFT';
+           ELSE
+             LV_PAY_CODE  := 'CHECK';
+             ln_pay_group := 'HDFC EMP CHECK';
+           END IF;
+        ELSIF LV_STATUS_CHECK = 'INACTIVE' THEN
+         LV_PAY_CODE  := 'CHECK';
+         ln_pay_group := 'HDFC EMP CHECK';
+        END IF;
+       ELSE
+         LV_PAY_CODE  := 'CHECK';
+         ln_pay_group := 'HDFC EMP CHECK';
+       END IF;
+     END IF;
+    --
+     IF LV_PAY_CODE IS NULL THEN
+      IF  i.PAYMENT_METHOD_LOOKUP_CODE IS NOT NULL THEN
+
+       LV_INV_LUKUP := NULL;
+
+     BEGIN
+        SELECT PAYMENT_METHOD_CODE
+        INTO LV_INV_LUKUP
+        FROM IBY_PAYMENT_METHODS_B
+        WHERE PAYMENT_METHOD_CODE = trim(i.PAYMENT_METHOD_LOOKUP_CODE);
+      EXCEPTION
+        WHEN OTHERS THEN
+          LV_INV_LUKUP := NULL;
+         lc_error_flag := 'Y';
+         lc_err_msg := lc_err_msg||'Invalid PAYMENT_METHOD_LOOKUP_CODE ,';
+      END;
+      --
+      END IF;
+     END IF;
+
+     IF ln_pay_group IS NULL THEN
+
+      IF i.PAY_GROUP_LOOKUP_CODE IS NOT NULL THEN
+        LV_INV_LUKUP := NULL;
+
+      BEGIN
+        SELECT LOOKUP_CODE
+        INTO LV_INV_LUKUP
+        FROM FND_LOOKUP_VALUES_VL
+        WHERE lookup_type = 'PAY GROUP'
+        AND   lookup_code = trim(upper(i.PAY_GROUP_LOOKUP_CODE));
+      EXCEPTION
+        WHEN OTHERS THEN
+          LV_INV_LUKUP := NULL;
+         lc_error_flag := 'Y';
+         lc_err_msg := lc_err_msg||'Invalid PAY_GROUP_LOOKUP_CODE ,';
+      END;
+     END IF;
+    END IF;
+   END IF;
+
+  IF lc_error_flag <> 'Y' THEN
+  --
+  -- Inserting into AP_INVOICES_INTERFACE Table
+  --
+          IF NVL(lc_INVOICE_CURRENCY_CODE,'INR') = 'INR' THEN
+                  --ln_invoice_amount := i.invoice_amount;
+                  lc_exchange_rate_type := NULL;
+          ELSE
+                  --ln_invoice_amount := NVL(i.invoice_amount,0);
+                  lc_exchange_rate_type := 'User';
+          END IF;
+  BEGIN
+      INSERT INTO ap_invoices_interface(
+                  invoice_id,
+                  invoice_num,
+                  INVOICE_TYPE_LOOKUP_CODE,
+                  invoice_date,
+                  po_number,
+                  vendor_id,
+                  vendor_num,
+                  --vendor_name,
+                  vendor_SITE_id,
+                  vendor_SITE_code,
+                  invoice_amount,
+                  INVOICE_CURRENCY_CODE,
+                  exchange_rate,
+                  exchange_rate_type,
+                  exchange_date,
+                  terms_id,
+                  terms_name,
+                  description,
+                  last_update_date,
+                  last_updated_by,
+                  last_update_login,
+                  creation_date,
+                  created_by,
+                  source,
+                  group_id,
+                  gl_date,
+                  --accts_pay_code_combination_id,
+                  org_id,
+                  DOC_CATEGORY_CODE
+                  --attribute15
+                 ,PREPAY_NUM
+                 ,PREPAY_APPLY_AMOUNT
+                 ,INVOICE_INCLUDES_PREPAY_FLAG
+                 ,PREPAY_GL_DATE
+                 ,pay_group_lookup_code
+                 ,PREPAY_DIST_NUM
+                 ,attribute_category
+                 ,attribute4
+                 ,attribute5
+                 ,attribute6
+                 ,attribute7
+                 ,attribute8
+                 ,attribute9
+                 ,attribute10
+                 ,PAYMENT_METHOD_CODE
+
+
+          ) VALUES (
+                  ln_invoice_id_h,        -- invoice_id
+                  i.INVOICE_NUM,         -- invoice_num
+                  trim(upper(i.INVOICE_TYPE_LOOKUP_CODE)),                 -- INVOICE_TYPE_LOOKUP_CODE_LOOKUP_CODE_LOOKUP_CODE_lookup_code
+                  ld_invoice_date,        -- invoice_date
+                  NULL,                  -- po_number
+                  ln_vendor_id,          -- vendor_id
+                  lc_vendor_num,          -- vendor_num
+                  --lc_vendor_name, -- vendor_name
+                  ln_vendor_SITE_id,     -- vendor_VENDOR_SITE_CODE_id
+                  lc_vendor_SITE_code,    -- vendor_VENDOR_SITE_CODE_code
+                  ln_invoice_amount,      -- invoice_amount
+                  lc_INVOICE_CURRENCY_CODE,                    -- INVOICE_CURRENCY_CODE_code
+                  lc_exchange_rate,                       -- exchange_rate
+                  lc_exchange_rate_type,                  -- exchange_rate_type
+                  NULL,                   -- exchange_date
+                  NVL(ln_terms_id,10000),            -- terms_id
+                  lc_terms_name,          -- terms_name
+                  lc_description,-- description
+                  SYSDATE,                -- last_update_date
+                  FND_GLOBAL.USER_ID,                     -- last_updated_by
+                  FND_GLOBAL.USER_ID,                     -- last_update_login
+                  SYSDATE,                -- creation_date
+                  FND_GLOBAL.USER_ID,                     -- created_by
+                  DECODE(i.source,NULL,'MIGRATION',i.source||'-MIGRATION'),--'MIGRATION_PAYABLE', -- source
+                  NULL,                   -- group_id
+                  i.gl_date,--gl_date
+                  --ln_laibility_ccid,            -- accts_pay_code_combination_id
+                  NVL(i.ORG_ID,FND_GLOBAL.ORG_ID),                   -- org_id
+                  i.DOC_CATEGORY_CODE
+                  --lc_attribute15_ccid
+                 ,i.prepay_num
+                 ,i.PREPAY_APPLY_AMOUNT
+                 ,i.INVOICE_INCLUDES_PREPAY_FLAG
+                 ,i.prepay_gl_date
+                 ,NVL(ln_pay_group,i.PAY_GROUP_LOOKUP_CODE)
+                 ,l_PREPAY_DIST_NUM
+                 ,i.attribute_category
+                 ,i.attribute4
+                 ,i.attribute5
+                 ,i.attribute6
+                 ,i.attribute7
+                 ,i.attribute8
+                 ,i.attribute9
+                 ,i.attribute10
+                 ,NVL(LV_PAY_CODE,i.PAYMENT_METHOD_LOOKUP_CODE)
+                  );
+  EXCEPTION
+  WHEN OTHERS THEN
+          UPDATE xx_AP_INVOICE_STAGING
+          SET interface_status = 'E',
+              error_message = 'Error while inserting into AP_INVOICES_INTERFACE.'
+          WHERE VENDOR_NAME = i.VENDOR_NAME
+          AND INVOICE_NUM  = i.INVOICE_NUM
+          AND VENDOR_SITE_CODE            = i.VENDOR_SITE_CODE
+          AND vendor_num = i.vendor_num;
+          dbms_output.put_line('Error '||SQLERRM);
+          lc_error_flag := 'Y';
+          lc_err_msg := lc_err_msg||' Error while inserting into AP_INVOICES_INTERFACE,'||SQLERRM||'- '||ln_invoice_id_h;
+  END;
+  END IF;
+  --
+  -- Lines data inserting into ap_invoice_lines_interface
+  --
+  FOR j IN c_lines_inf(i.VENDOR_NAME,i.INVOICE_NUM,i.VENDOR_SITE_CODE,i.VENDOR_NUM,p_source)
+  LOOP
+  --
+  -- Invoice Line Id fetching
+  --
+  ln_global_1 := NULL;
+  ln_global_2 := NULL;
+--
+  IF lc_error_flag <> 'Y' THEN
+  --
+  BEGIN
+    SELECT gll.chart_of_accounts_id
+    INTO LN_COA_ID
+    FROM hr_operating_units hou
+        ,gl_ledgers gll
+    WHERE hou.set_of_books_id = gll.ledger_id
+    AND hou.organization_id = i.ORG_ID;
+  EXCEPTION
+    WHEN OTHERS THEN
+      LN_COA_ID := NULL;
+  END;
+  --
+  BEGIN
+    SELECT fnd_flex_ext.get_ccid('SQLGL',
+                        'GL#',
+                      NVL(LN_COA_ID,50348),
+                      fnd_date.date_to_canonical(SYSDATE),
+                      j.DIST_CODE_CONCATENATED
+                     )
+     INTO LN_CCD_ID
+     FROM DUAL;
+    -- COMMIT;
+  EXCEPTION
+    WHEN OTHERS THEN
+      LN_CCD_ID := NULL;
+  END;
+  --
+  IF LN_CCD_ID = 0 THEN
+    lc_error_flag := 'Y';
+    lc_err_msg := lc_err_msg||' Code Combination is Invalid,';
+  END IF;
+  --
+  IF j.GLOBAL_ATTRIBUTE1 IS NOT NULL THEN
+  BEGIN
+    SELECT tax_id
+    INTO ln_global_1
+    FROM jai_cmn_taxes_all
+    where trim(tax_name) = trim(j.GLOBAL_ATTRIBUTE1);
+  EXCEPTION
+   WHEN OTHERS THEN
+     ln_global_1 := null;
+     lc_error_flag := 'Y';
+     lc_err_msg := lc_err_msg||'Invalid tax code for global_attibute1';
+  END;
+  END IF;
+  --
+  IF j.GLOBAL_ATTRIBUTE2 IS NOT NULL THEN
+  BEGIN
+    SELECT tax_id
+    INTO ln_global_2
+    FROM jai_cmn_taxes_all
+    where trim(tax_name) = trim(j.GLOBAL_ATTRIBUTE2);
+  EXCEPTION
+   WHEN OTHERS THEN
+     ln_global_2 := null;
+     lc_error_flag := 'Y';
+     lc_err_msg := lc_err_msg||'Invalid tax code for global_attibute2';
+  END;
+  END IF;
+  --
+  IF i.INVOICE_TYPE_LOOKUP_CODE = 'STANDARD' THEN
+       BEGIN
+                   SELECT code_combination_id
+                   INTO ln_code_combination_id
+                   FROM gl_code_combinations_kfv
+                   WHERE concatenated_segments = j.DIST_CODE_CONCATENATED;
+       EXCEPTION
+          WHEN NO_DATA_FOUND THEN
+                  UPDATE xx_AP_INVOICE_STAGING
+                  SET interface_status = 'E',
+                  error_message = 'STANDARD Combination Id not exists'
+                  WHERE VENDOR_NAME = i.VENDOR_NAME
+                  AND INVOICE_NUM  = i.INVOICE_NUM
+                  AND VENDOR_SITE_CODE            = i.VENDOR_SITE_CODE
+                  AND LINE_NUMBER = j.LINE_NUMBER
+                  AND VENDOR_NUM = i.vendor_num;
+                  lc_error_flag := 'Y';
+                  lc_err_msg := lc_err_msg||' Code Combination ID not Exist,';
+          WHEN OTHERS THEN
+                  UPDATE xx_AP_INVOICE_STAGING
+                  SET interface_status = 'E',
+                  error_message = 'Error while fetching STANDARD Combination.'
+                  WHERE VENDOR_NAME = i.VENDOR_NAME
+                  AND INVOICE_NUM  = i.INVOICE_NUM
+                  AND VENDOR_SITE_CODE            = i.VENDOR_SITE_CODE
+                  AND LINE_NUMBER = j.LINE_NUMBER
+                  AND VENDOR_NUM = i.vendor_num;
+                  lc_error_flag := 'Y';
+                  lc_err_msg := lc_err_msg||' Error while fetching STANDARD Combination,';
+          END;
+
+  ELSE
+          BEGIN
+                   SELECT code_combination_id
+                   INTO ln_code_combination_id
+                   FROM gl_code_combinations_kfv
+                   WHERE concatenated_segments = j.DIST_CODE_CONCATENATED;
+          EXCEPTION
+          WHEN NO_DATA_FOUND THEN
+                  UPDATE xx_AP_INVOICE_STAGING
+                  SET interface_status = 'E',
+                  error_message = 'CREDIT Combination Id not exists'
+                  WHERE VENDOR_NAME = i.VENDOR_NAME
+                  AND INVOICE_NUM  = i.INVOICE_NUM
+                  AND VENDOR_SITE_CODE            = i.VENDOR_SITE_CODE
+                  AND LINE_NUMBER = j.LINE_NUMBER
+                  AND vendor_num = i.vendor_num;
+                  lc_error_flag := 'Y';
+                  lc_err_msg := lc_err_msg||' CREDIT Combination Id not exists,';
+          WHEN OTHERS THEN
+                  UPDATE xx_AP_INVOICE_STAGING
+                  SET interface_status = 'E',
+                  error_message = 'Error while fetching CREDIT Combination.'
+                  WHERE VENDOR_NAME = i.VENDOR_NAME
+                  AND INVOICE_NUM  = i.INVOICE_NUM
+                  AND VENDOR_SITE_CODE            = i.VENDOR_SITE_CODE
+                  AND LINE_NUMBER = j.LINE_NUMBER
+                  AND vendor_num = i.vendor_num;
+                  lc_error_flag := 'Y';
+                  lc_err_msg := lc_err_msg||' Error while fetching CREDIT Combination,';
+          END;
+  END IF;
+  END IF;
+  --
+  IF lc_error_flag <> 'Y' THEN
+          --ln_line_count := ln_line_count+1;
+          --
+          SELECT ap_invoice_lines_interface_s.NEXTVAL
+          INTO ln_invoice_id_l
+          FROM dual;
+          BEGIN
+              INSERT INTO ap_invoice_lines_interface(
+                  INVOice_id,
+                  invoice_line_id,
+                  line_number,
+                  line_type_lookup_code,
+                  line_group_number,
+                  amount,
+                  dist_code_combination_id,
+                  last_updated_by,
+                  last_update_date,
+                  last_update_login,
+                  created_by,
+                  creation_date,
+                  org_id,
+                  description,
+                  GLOBAL_ATTRIBUTE_CATEGORY,
+                  GLOBAL_ATTRIBUTE1,
+                  GLOBAL_ATTRIBUTE2,
+                  GLOBAL_ATTRIBUTE3,
+                  GLOBAL_ATTRIBUTE4,
+                  GLOBAL_ATTRIBUTE5,
+                  ATTRIBUTE_CATEGORY,
+                  ATTRIBUTE1,
+                  ATTRIBUTE2,
+                  ATTRIBUTE3,
+                  ATTRIBUTE4,
+                  ATTRIBUTE5,
+                  ATTRIBUTE6,
+                  ATTRIBUTE7,
+                  ATTRIBUTE8,
+                  ATTRIBUTE9,
+                  ATTRIBUTE10,
+                  ATTRIBUTE11,
+                  ATTRIBUTE12,
+                  ATTRIBUTE13,
+                  ATTRIBUTE14,
+                  ATTRIBUTE15,
+                  ASSETS_TRACKING_FLAG,
+                  ITEM_DESCRIPTION,
+                  SERIAL_NUMBER,
+                  MANUFACTURER,
+                  MODEL_NUMBER,
+                  asset_category_id
+                  )
+                  VALUES (
+                          ln_invoice_id_h,        -- INVOICE_ID
+                          ln_invoice_id_l,        -- INVOICE_LINE_ID
+                          j.line_number,          -- LINE_NUMBER
+                          NVL(j.LINE_TYPE_LOOKUP_CODE,'ITEM'),  -- LINE_TYPE_LOOKUP_CODE
+                          NULL,                   -- LINE_GROUP_NUMBER
+                          --j.invoice_amount,     -- AMOUNT
+                          NVL(j.amount,ln_invoice_amount),
+                          ln_code_combination_id,--DIST_CODE_COMBINATION_ID
+                         FND_GLOBAL.USER_ID,                     -- last_updated_by
+                          SYSDATE,                -- last_update_date
+                         FND_GLOBAL.USER_ID,        -- last_update_login
+                         FND_GLOBAL.USER_ID,        -- created_by
+                          SYSDATE,                -- creation_date
+                         NVL(j.org_id,FND_GLOBAL.ORG_ID),             -- ORG_ID
+                          j.line_description,
+
+                          decode(j.DIST_GLOBAL_ATT_CATEGORY,NULL,decode(ln_global_1,NULL,decode(ln_global_2,NULL,NULL,'JA.IN.APXINWKB.DISTRIBUTIONS'),'JA.IN.APXINWKB.DISTRIBUTIONS'),j.DIST_GLOBAL_ATT_CATEGORY),
+                          ln_global_1,
+                          ln_global_2,
+                          j.GLOBAL_ATTRIBUTE3,
+                          j.GLOBAL_ATTRIBUTE4,
+                          j.GLOBAL_ATTRIBUTE5,
+                          J.DIST_ATTRIBUTE_CATEGORY,
+                          J.DIST_ATTRIBUTE1,
+                          J.DIST_ATTRIBUTE2,
+                          J.DIST_ATTRIBUTE3,
+                          J.DIST_ATTRIBUTE4,
+                          J.DIST_ATTRIBUTE5,
+                          J.DIST_ATTRIBUTE6,
+                          J.DIST_ATTRIBUTE7,
+                          J.DIST_ATTRIBUTE8,
+                          J.DIST_ATTRIBUTE9,
+                          J.DIST_ATTRIBUTE10,
+                          J.DIST_ATTRIBUTE11,
+                          J.DIST_ATTRIBUTE12,
+                          J.DIST_ATTRIBUTE13,
+                          J.DIST_ATTRIBUTE14,
+                          J.DIST_ATTRIBUTE15,
+                          j.ASSET_TRACKING_FLAG,
+                          j.ITEM_DESCRIPTION,
+                          j.SERIAL_NUMBER,
+                          j.MANUFACTURER,
+                          j.MODEL_NUMBER,
+                          j.asset_category_id
+                          );
+          EXCEPTION
+          WHEN OTHERS THEN
+                  UPDATE xx_AP_INVOICE_STAGING
+                  SET interface_status = 'E',
+                      error_message = 'Error while inserting into AP_INVOICE_LINES_INTERFACE.'
+                  WHERE VENDOR_NAME = i.VENDOR_NAME
+                AND INVOICE_NUM = i.INVOICE_NUM
+                    AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE
+                    AND vendor_num = i.vendor_num;
+                  --
+                  lc_error_flag := 'Y';
+                  lc_err_msg := lc_err_msg||'Error while inserting into AP_INVOICE_LINES_INTERFACE,'||SQLERRM;
+          END;
+
+  END IF;
+  END LOOP;--c_lines_inf
+  --
+  --
+ -- FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'Inserted '||'- '||ln_line_count||' LINES OF INVOICE NUMBER '||i.INVOICE_NUM);
+  --
+  -- Update interface_status = P in ur staging table after inserting
+  -- into AP Invoices Interface table
+  --
+  ln_line_count := 0;
+  --
+  ----check for unbalance Invoice Lines ------------
+
+  BEGIN
+    SELECT SUM(amount)
+    INTO ln_line_amt
+    FROM xx_AP_INVOICE_STAGING
+    WHERE VENDOR_NAME = i.VENDOR_NAME
+     AND  INVOICE_NUM  = i.INVOICE_NUM
+     AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE;
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      ln_line_amt := 0;
+  END;
+  --
+  IF  ln_line_amt <> ln_invoice_amt THEN
+
+    ---ROLLBACK;
+
+          UPDATE xx_AP_INVOICE_STAGING
+          SET interface_status = 'E'
+          ,error_message = error_message||'Unbalnced Invoice Lines'
+          WHERE VENDOR_NAME = i.VENDOR_NAME
+          AND INVOICE_NUM  = i.INVOICE_NUM
+          AND VENDOR_SITE_CODE = i.VENDOR_SITE_CODE;
+    --
+    lc_error_flag := 'Y';
+    lc_err_msg := lc_err_msg||' ,Unbalnced Invoice Lines' ;
+   -- COMMIT;
+  END IF;
+  --
+  IF lc_error_flag <> 'Y'
+  THEN
+          UPDATE xx_AP_INVOICE_STAGING
+          SET interface_status = 'P'
+          WHERE VENDOR_NAME = i.VENDOR_NAME
+          AND INVOICE_NUM  = i.INVOICE_NUM
+          AND VENDOR_SITE_CODE   = i.VENDOR_SITE_CODE;
+  commit;
+
+  ELSE
+     rollback;
+          UPDATE xx_AP_INVOICE_STAGING
+          SET interface_status = 'E'
+             ,error_message = error_message||lc_err_msg
+          WHERE nvl(VENDOR_NAME,'X') = nvl(i.VENDOR_NAME,'X')
+          AND INVOICE_NUM  = i.INVOICE_NUM
+          AND nvl(VENDOR_SITE_CODE,'X')   = nvl(i.VENDOR_SITE_CODE,'X');
+          commit;
+    FND_FILE.PUT_LINE(FND_FILE.LOG,'Invoice Number - '||i.INVOICE_NUM||' - '||i.VENDOR_NAME||chr(10)||lc_err_msg);
+
+  END IF;
+
+  -- Invoice and Line count --
+
+
+END LOOP;--c_headers_inf
+--
+  BEGIN
+    SELECT COUNT(*)
+    INTO LN_RECD_COUNT
+    FROM  AP_INVOICES_INTERFACE
+    WHERE SOURCE like '%MIGRATION%'
+    AND STATUS IS NULL;
+  EXCEPTION
+    WHEN OTHERS THEN
+       LN_RECD_COUNT := 0;
+  END;
+  --
+  IF LN_RECD_COUNT > 0 THEN
+    FOR LR_PREPAYMENT_CHECK IN LC_PREPAYMENT_CHECK
+    LOOP
+       LN_PRE_APP_AMT := 0;
+       LN_PREPAY_AMT_1 := 0;
+       LN_PREPAY_AMT_2 := 0;
+      BEGIN
+        SELECT nvl(SUM(invoice_amount),0)
+        INTO LN_PREPAY_AMT_1
+        FROM ap_invoices_all
+        WHERE invoice_type_lookup_code = 'PREPAYMENT'
+        AND vendor_id = LR_PREPAYMENT_CHECK.VENDOR_ID;
+      EXCEPTION
+        WHEN OTHERS THEN
+          LN_PREPAY_AMT_1 := 0;
+      END;
+      --
+      BEGIN
+        SELECT nvl(SUM(invoice_amount),0)
+        INTO LN_PREPAY_AMT_2
+        FROM AP_INVOICES_INTERFACE
+        WHERE invoice_type_lookup_code = 'PREPAYMENT'
+        AND vendor_id = LR_PREPAYMENT_CHECK.VENDOR_ID
+        AND status is null;
+      EXCEPTION
+        WHEN OTHERS THEN
+          LN_PREPAY_AMT_2 := 0;
+      END;
+      --
+      BEGIN
+        SELECT NVL(-1*SUM(AMOUNT),0)
+        INTO LN_PRE_APP_AMT
+        FROM AP_INVOICE_LINES_ALL
+        WHERE PREPAY_INVOICE_ID IS NOT NULL
+        AND INVOICE_ID IN (SELECT INVOICE_ID
+                           FROM AP_INVOICES_ALL
+                           WHERE VENDOR_ID = LR_PREPAYMENT_CHECK.VENDOR_ID);
+      EXCEPTION
+        WHEN OTHERS THEN
+           LN_PRE_APP_AMT := 0;
+      END;
+      --
+      IF ((LN_PREPAY_AMT_1+LN_PREPAY_AMT_2) - LN_PRE_APP_AMT) > 0 THEN
+         UPDATE AP_INVOICES_INTERFACE SET SOURCE = SOURCE||'-HOLD'
+         WHERE SOURCE like '%MIGRATION%'
+         and source not like '%MIGRATION%HOLD%'
+         AND VENDOR_ID = LR_PREPAYMENT_CHECK.VENDOR_ID
+         AND invoice_type_lookup_code ='STANDARD'
+         AND STATUS IS NULL;
+         --
+         COMMIT;
+      END IF;
+
+       -------Hold Check For Inactive Employee Vendor  ---------
+       LN_PERSON_ID := 0;
+       --
+       BEGIN
+         SELECT ppf.PERSON_ID
+         INTO LN_PERSON_ID
+         FROM PER_ALL_PEOPLE_F ppf
+             ,PO_VENDORS pv
+         WHERE ppf.person_id = pv.employee_id
+         AND  upper(ppf.attribute5) = 'INACTIVE'
+         AND  pv.vendor_type_lookup_code = 'EMPLOYEE'
+         AND  pv.vendor_id = LR_PREPAYMENT_CHECK.VENDOR_ID;
+       EXCEPTION
+         WHEN OTHERS THEN
+          LN_PERSON_ID := 0;
+       END;
+       --
+       IF LN_PERSON_ID <> 0 THEN
+
+         UPDATE AP_INVOICES_INTERFACE SET SOURCE = SOURCE||'-HOLD'
+         WHERE SOURCE like '%MIGRATION%'
+         and source not like '%MIGRATION%HOLD%'
+         AND VENDOR_ID = LR_PREPAYMENT_CHECK.VENDOR_ID
+         AND invoice_type_lookup_code ='STANDARD'
+         AND STATUS IS NULL;
+
+      END IF;
+    END LOOP;
+  END IF;
+  --
+  begin
+  SELECT COUNT(*)
+  INTO ln_inv_count
+  FROM AP_INVOICES_INTERFACE ai
+      ,ap_invoice_lines_interface ail
+  WHERE ai.SOURCE like p_source||'%MIGRATION%'
+  and  ai.invoice_id = ail.invoice_id
+  AND   ai.STATUS IS NULL;
+  --
+  exception
+    when others then
+     ln_inv_count := 0;
+  end;
+  --
+ BEGIN
+  UPDATE AP_INVOICES_INTERFACE SET SOURCE = SOURCE||'-HOLD'
+  WHERE SOURCE like '%MIGRATION%'
+  AND SOURCE not like '%MIGRATION%HOLD%'
+  AND trim(INVOICE_INCLUDES_PREPAY_FLAG) = 'H'
+  AND STATUS IS NULL;
+  --
+  COMMIT;
+  --
+  UPDATE AP_INVOICES_INTERFACE SET INVOICE_INCLUDES_PREPAY_FLAG = NULL
+  WHERE SOURCE like '%MIGRATION%'
+  AND trim(INVOICE_INCLUDES_PREPAY_FLAG) = 'H'
+  AND STATUS IS NULL;
+  commit;
+ END;
+  --
+FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'Total Invoice Lines loaded'||' - '||ln_inv_count);
+
+IF ln_inv_count > 0 THEN
+FND_FILE.PUT_LINE(FND_FILE.OUTPUT,rpad('Invoice Number',50)||rpad('Invoice Date',15)||rpad('Vendor Name',50)||rpad('Vendor Site Code',17)||rpad('Source',30));
+FOR lr_loaded_supplier IN lc_loaded_supplier(p_source) LOOP
+  --
+  EXIT WHEN lc_loaded_supplier%NOTFOUND;
+  FND_FILE.PUT_LINE(FND_FILE.OUTPUT,rpad(lr_loaded_supplier.INVOICE_NUM,50)||rpad(lr_loaded_supplier.INVOICE_DATE,15)||rpad(lr_loaded_supplier.VENDOR_NAME,50)||rpad(lr_loaded_supplier.source,30));
+  --
+END LOOP;
+END IF;
+END main;
+--
+
+PROCEDURE RUN(x_err_buf  OUT VARCHAR2
+               ,x_ret_code OUT VARCHAR2
+               ,p_file IN VARCHAR2
+               ,p_source   IN  VARCHAR2
+               )
+  IS
+  ln_request_id NUMBER;
+  ln_request_id_1  NUMBER;
+  BEGIN
+    --
+    ln_request_id_1 := FND_REQUEST.SUBMIT_REQUEST('SQLAP'
+                                               ,'xx_TDS_UPDATE_PROG'
+                                                ,''
+                                                ,''
+                                                ,FALSE
+                                                );
+    COMMIT;
+
+    DELETE FROM xx_AP_INVOICE_STAGING
+    WHERE upper(trim(source)) = upper(trim(p_source))
+    and   trunc(process_date) < trunc(sysdate);
+    --
+    COMMIT;
+    --
+    extract_record(p_file);
+
+    ln_request_id := FND_REQUEST.SUBMIT_REQUEST('SQLAP'
+                                               ,'BSLIAPINVIMPORT'
+                                                ,''
+                                                ,''
+                                                ,FALSE
+                                                ,p_source
+                                                );
+    COMMIT;
+
+END RUN;
+
+END xx_ap_interface_pkg;
+/
