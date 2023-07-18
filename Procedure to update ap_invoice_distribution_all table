@@ -1,0 +1,67 @@
+CREATE OR REPLACE procedure APPS.XXxx_INV_DIST_UPDATE(p_err_buf OUT VARCHAR2
+                                                  ,p_ret_code OUT VARCHAR2
+                                                  )
+AS
+cursor lcu_inv_tds_update
+IS
+SELECT distinct ail.invoice_id,ail.line_number,ail.GLOBAL_ATTRIBUTE1,ail.GLOBAL_ATTRIBUTE2,ail.GLOBAL_ATTRIBUTE3
+FROM ap_invoice_lines_all ail
+    ,ap_invoice_distributions_all aid
+WHERE ail.GLOBAL_ATTRIBUTE_CATEGORY = 'JA.IN.APXINWKB.DISTRIBUTIONS'
+AND ail.invoice_id = aid.invoice_id
+AND ail.line_number = aid.invoice_line_number
+AND aid.GLOBAL_ATTRIBUTE_CATEGORY IS NULL;
+lv_inv_num VARCHAR2(250);
+LN_COUNT NUMBER;
+BEGIN
+    BEGIN
+     SELECT COUNT(*)
+     INTO LN_COUNT
+     FROM ap_invoice_lines_all ail
+         ,ap_invoice_distributions_all aid
+     WHERE ail.GLOBAL_ATTRIBUTE_CATEGORY = 'JA.IN.APXINWKB.DISTRIBUTIONS'
+     AND ail.invoice_id = aid.invoice_id
+     AND ail.line_number = aid.invoice_line_number
+     AND aid.GLOBAL_ATTRIBUTE_CATEGORY IS NULL;
+    EXCEPTION
+       WHEN OTHERS THEN
+         LN_COUNT := 0;
+    END;
+    --
+   IF LN_COUNT >0 THEN
+   FND_FILE.put_line(FND_FILE.OUTPUT,'Following Invoices have been Updated');
+   FOR lr_inv_tds_update IN lcu_inv_tds_update
+   LOOP
+     BEGIN
+     UPDATE ap_invoice_distributions_all SET GLOBAL_ATTRIBUTE_CATEGORY = 'JA.IN.APXINWKB.DISTRIBUTIONS'
+      ,GLOBAL_ATTRIBUTE1=lr_inv_tds_update.GLOBAL_ATTRIBUTE1
+      ,GLOBAL_ATTRIBUTE2=lr_inv_tds_update.GLOBAL_ATTRIBUTE2
+      ,GLOBAL_ATTRIBUTE3=lr_inv_tds_update.GLOBAL_ATTRIBUTE3
+     WHERE invoice_id = lr_inv_tds_update.invoice_id
+     AND INVOICE_LINE_NUMBER = lr_inv_tds_update.line_number
+     AND GLOBAL_ATTRIBUTE_CATEGORY IS NULL;
+     --
+     EXCEPTION
+       WHEN OTHERS THEN
+         FND_FILE.put_line(FND_FILE.OUTPUT,'Exception Occured');
+         ROLLBACK;
+     END;
+     --
+     BEGIN
+       SELECT INVOICE_NUM
+       INTO lv_inv_num
+       from ap_invoices_all
+       where invoice_id = lr_inv_tds_update.invoice_id;
+     EXCEPTION
+       WHEN OTHERS THEN
+         lv_inv_num := NULL;
+     END;
+     FND_FILE.put_line(FND_FILE.OUTPUT,lv_inv_num);
+   END LOOP;
+   --
+   COMMIT;
+   ELSE
+      FND_FILE.put_line(FND_FILE.OUTPUT,'NO INVOICE TO UPDATE');
+   END IF;
+END XXxx_INV_DIST_UPDATE;
+/
