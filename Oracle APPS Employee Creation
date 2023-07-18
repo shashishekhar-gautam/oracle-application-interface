@@ -1,0 +1,1467 @@
+CREATE OR REPLACE package APPS.xx_employe_creation
+is
+TYPE r_EMP_rec_type IS RECORD(
+Employee_Number    xx_emp_tab.Employee_Number%TYPE,
+Last_Name   xx_emp_tab.Last_Name%TYPE,
+First_Name   xx_emp_tab.First_Name%TYPE,
+Title   xx_emp_tab.Title%TYPE,
+HIRE_DATE   xx_emp_tab.HIRE_DATE%TYPE,
+Date_Of_Birth   xx_emp_tab.Date_Of_Birth%TYPE,
+Sex   xx_emp_tab.Sex%TYPE,
+Job   xx_emp_tab.Job%TYPE,
+Grade   xx_emp_tab.Grade%TYPE,
+Supervisor_Name   xx_emp_tab.Supervisor_Name%TYPE,
+Set_Of_Books   xx_emp_tab.Set_Of_Books%TYPE,
+Default_Expense_Account   xx_emp_tab.Default_Expense_Account%TYPE,
+Office   xx_emp_tab.Office%TYPE,
+Bank_Name   xx_emp_tab.Bank_Name%TYPE,
+Bank_Branch   xx_emp_tab.Bank_Branch%TYPE,
+Bank_Account   xx_emp_tab.Bank_Account%TYPE,
+Date_Of_Joining   xx_emp_tab.Date_Of_Joining%TYPE,
+Email_Id   xx_emp_tab.Email_Id%TYPE,
+Payment_Method_Code   xx_emp_tab.Payment_Method_Code%TYPE,
+Pay_Group   xx_emp_tab.Pay_Group%TYPE,
+Prepayment_Account   xx_emp_tab.Prepayment_Account%TYPE,
+Liability_Account   xx_emp_tab.Liability_Account%TYPE,
+Pan_Number   xx_emp_tab.Pan_Number%TYPE,
+Ifsc_Code   xx_emp_tab.Ifsc_Code%TYPE,
+Ledger   xx_emp_tab.Ledger%TYPE,
+Organization   xx_emp_tab.Organization%TYPE,
+Employment_Start_Date   xx_emp_tab.Employment_Start_Date%TYPE,
+Employee_End_Date   xx_emp_tab.Employee_End_Date%TYPE,
+Style   xx_emp_tab.Style%TYPE,
+Address   xx_emp_tab.Address%TYPE,
+Assignment_Number   xx_emp_tab.Assignment_Number%TYPE,
+Position   xx_emp_tab.Position%TYPE,
+SUPPLIER_STATUS   xx_emp_tab.SUPPLIER_STATUS%TYPE,
+INACTIVE_DATE   xx_emp_tab.INACTIVE_DATE%TYPE,
+U_NFLAG   xx_emp_tab.U_NFLAG%TYPE,
+INT_STATUS   xx_emp_tab.INT_STATUS%TYPE,
+API_STATUS   xx_emp_tab.API_STATUS%TYPE,
+VAL_ERROR   xx_emp_tab.VAL_ERROR%TYPE,
+API_ERROR   xx_emp_tab.API_ERROR%TYPE
+);
+PROCEDURE MAIN_P;
+G_NEXT                   NUMBER        :=FND_MSG_PUB.G_NEXT;
+   G_FALSE                  VARCHAR2(1)   :=FND_API.G_FALSE;
+   G_COUNTRY_CODE           VARCHAR2(50)  :='IN';
+   G_REQUEST_ID             NUMBER        := FND_GLOBAL.CONC_REQUEST_ID;
+   G_ORG_ID                 NUMBER        := FND_PROFILE.VALUE ('ORG_ID');
+   G_USER_ID                NUMBER        := FND_PROFILE.VALUE ('USER_ID');
+   G_LOGIN_ID               NUMBER        := FND_GLOBAL.LOGIN_ID;
+   G_ERROR                  NUMBER        := 2;
+   G_WARNING                NUMBER        := 1;
+   G_RECORD                 NUMBER        := 0;
+end xx_employe_creation;
+/
+
+
+
+
+CREATE OR REPLACE PACKAGE BODY APPS.xx_employe_creation
+IS
+--*********************************************************************
+--
+-- Package Name   :  xx_employe_creation
+--
+-- Description    :  employee migration package
+--
+-- DEVELOPMENT/MAINTENANCE HISTORY
+--
+-- date          author             Version  Description
+-- ---------     ----------------   -------  --------------------------
+--8 march 2010      shashi shekhar gautam 1.0   initial version
+--
+---
+   PROCEDURE create_employ (
+      l_emp_rec_type         r_emp_rec_type,
+      ret_status       OUT   VARCHAR2,
+      api_err          OUT   VARCHAR2,
+      pperson_id       OUT   NUMBER
+   )
+   IS
+     --- PRAGMA AUTONOMOUS_TRANSACTION;
+      v_person_id                   NUMBER;
+      v_assignment_id               NUMBER;
+      v_per_object_version_number   NUMBER;
+      v_asg_object_version_number   NUMBER;
+      v_per_effective_start_date    DATE;
+      v_per_effective_end_date      DATE;
+      v_per_comment_id              NUMBER;
+      v_assignment_sequence         NUMBER;
+      v_assignment_number           VARCHAR2 (1000);
+      v_name_combination_warning    BOOLEAN;
+      v_assign_payroll_warning      BOOLEAN;
+      v_orig_hire_warning           BOOLEAN;
+      v_full_name                   VARCHAR2 (500);
+      l_hire_date                   DATE;
+      l_last_name                   VARCHAR2 (250);
+      l_first_name                  VARCHAR2 (250);
+      l_gender                      VARCHAR2 (10);
+      l_date_of_birth               DATE;
+      l_employee_number             VARCHAR2 (250);
+      l_person_type_id              NUMBER          := 6;
+      l_end_date                    DATE;
+      l_title                       VARCHAR2 (250);
+/*Following Variable is In and Out Parameter*/
+   BEGIN
+      l_hire_date := l_emp_rec_type.employment_start_date;
+      l_end_date := l_emp_rec_type.employee_end_date;
+      l_last_name := l_emp_rec_type.last_name;
+      l_first_name := l_emp_rec_type.first_name;
+      l_gender := l_emp_rec_type.sex;
+      l_date_of_birth := l_emp_rec_type.date_of_birth;
+      l_employee_number := l_emp_rec_type.employee_number;
+      v_person_id := NULL;
+      --l_title := l_emp_rec_type.title;
+      
+          begin
+      hr_employee_api.create_employee
+                 (p_validate                       => FALSE,
+                  p_hire_date                      => l_hire_date,
+                  p_title                          => NULL,---------L_TITLE,
+                  p_attribute1                     => l_emp_rec_type.bank_name,
+                  p_attribute2                     => l_emp_rec_type.bank_branch,
+                  p_attribute3                     => l_emp_rec_type.bank_account,
+                  p_attribute4                     => l_emp_rec_type.ifsc_code,
+                  p_business_group_id              => 0,
+                  p_last_name                      => l_last_name,
+                  p_sex                            => l_gender,
+                  p_person_type_id                 => 6,
+                  p_date_of_birth                  => l_date_of_birth,
+                  p_employee_number                => l_employee_number,
+                  p_first_name                     => l_first_name,
+                  p_coord_ben_no_cvg_flag          => 'N',
+                  p_dpdnt_vlntry_svce_flag         => 'N',
+                  p_person_id                      => v_person_id,
+                  p_assignment_id                  => v_assignment_id,
+                  p_per_object_version_number      => v_per_object_version_number,
+                  p_asg_object_version_number      => v_asg_object_version_number,
+                  p_per_effective_start_date       => v_per_effective_start_date,
+                  p_per_effective_end_date         => v_per_effective_end_date,
+                  p_full_name                      => v_full_name,
+                  p_per_comment_id                 => v_per_comment_id,
+                  p_assignment_sequence            => v_assignment_sequence,
+                  p_assignment_number              => v_assignment_number,
+                  p_name_combination_warning       => v_name_combination_warning,
+                  p_assign_payroll_warning         => v_assign_payroll_warning,
+                  p_orig_hire_warning              => v_orig_hire_warning
+                 );
+
+      IF v_person_id IS NOT NULL
+      THEN
+         ret_status := 'S';
+         pperson_id := v_person_id;
+      ELSE
+         ret_status := 'E';
+      END IF;
+
+      api_err := 'API error while creating employee';
+
+      IF v_person_id IS NOT NULL
+      THEN
+         DBMS_OUTPUT.put_line ('person_id ' || v_person_id);
+         DBMS_OUTPUT.put_line ('Person No ' || l_employee_number);
+      END IF;
+        exception when others then
+        dbms_output.put_line('exception employ'||l_employee_number);
+        ret_status := 'E';
+        end;
+      ---commit;
+   END create_employ;
+
+   PROCEDURE update_employ (
+      l_emp_rec_type         r_emp_rec_type,
+      ret_status       OUT   VARCHAR2,
+      api_err          OUT   VARCHAR2
+   )
+   IS
+     --- PRAGMA AUTONOMOUS_TRANSACTION;
+      x_effective_start_date       DATE;
+      x_effective_end_date         DATE;
+      x_applicant_number           VARCHAR2 (100);
+      x_comment_id                 NUMBER;
+      x_current_applicant_flag     VARCHAR2 (250);
+      x_current_emp_or_apl_flag    VARCHAR2 (250);
+      x_employee_number            VARCHAR2 (250) := '0070';
+      x_full_name                  VARCHAR2 (250);
+      x_npw_number                 VARCHAR2 (250);
+      x_object_version_number      VARCHAR2 (250) := 5;
+      x_object_v_no                VARCHAR2 (250);
+      x_name_combination_warning   BOOLEAN;
+      x_dob_null_warning           BOOLEAN;
+      x_orig_hire_warning          BOOLEAN;
+      l_person_id                  NUMBER;
+   BEGIN
+   begin
+      SELECT person_id
+        INTO l_person_id
+        FROM per_all_people_f
+       WHERE EMPLOYEE_NUMBER=l_emp_rec_type.EMPLOYEE_NUMBER;
+        exception
+        when others then
+        dbms_output.put_line('error in fetching person id for creation of employee');
+        L_person_id:=null;
+        end;
+
+      SELECT MAX (object_version_number)
+        INTO x_object_version_number
+        FROM per_all_people_f
+       WHERE person_id = l_person_id;
+
+      per_per_upd.upd
+                    (p_person_id                         => l_person_id,
+                     p_effective_start_date              => x_effective_start_date,
+                     p_effective_end_date                => x_effective_end_date,
+                     p_person_type_id                    => 6,
+                     p_last_name                         => l_emp_rec_type.last_name,
+                     p_start_date                        => hr_api.g_date,
+                     p_applicant_number                  => x_applicant_number,
+                     p_comment_id                        => x_comment_id,
+                     p_comments                          => hr_api.g_varchar2,
+                     p_current_applicant_flag            => x_current_applicant_flag,
+                     p_current_emp_or_apl_flag           => x_current_emp_or_apl_flag,
+                     p_current_employee_flag             => x_current_emp_or_apl_flag,
+                     p_date_employee_data_verified       => hr_api.g_date,
+                     p_date_of_birth                     => hr_api.g_date,
+                     p_email_address                     => hr_api.g_varchar2,
+                     p_employee_number                   => x_employee_number,
+                     p_expense_check_send_to_addres      => hr_api.g_varchar2,
+                     p_first_name                        => hr_api.g_varchar2,
+                     p_full_name                         => x_full_name,
+                     p_known_as                          => hr_api.g_varchar2,
+                     p_marital_status                    => hr_api.g_varchar2,
+                     p_middle_names                      => hr_api.g_varchar2,
+                     p_nationality                       => hr_api.g_varchar2,
+                     p_national_identifier               => hr_api.g_varchar2,
+                     p_previous_last_name                => hr_api.g_varchar2,
+                     p_registered_disabled_flag          => hr_api.g_varchar2,
+                     p_sex                               => hr_api.g_varchar2,
+                     p_title                             => hr_api.g_varchar2,
+                     p_vendor_id                         => hr_api.g_number,
+                     p_work_telephone                    => hr_api.g_varchar2,
+                     p_request_id                        => hr_api.g_number,
+                     p_program_application_id            => hr_api.g_number,
+                     p_program_id                        => hr_api.g_number,
+                     p_program_update_date               => hr_api.g_date,
+                     p_attribute_category                => hr_api.g_varchar2,
+                     p_attribute1                        => hr_api.g_varchar2,
+                     p_attribute2                        => hr_api.g_varchar2,
+                     p_attribute3                        => hr_api.g_varchar2,
+                     p_attribute4                        => hr_api.g_varchar2,
+                     p_attribute5                        => hr_api.g_varchar2,
+                     p_attribute6                        => hr_api.g_varchar2,
+                     p_attribute7                        => hr_api.g_varchar2,
+                     p_attribute8                        => hr_api.g_varchar2,
+                     p_attribute9                        => hr_api.g_varchar2,
+                     p_attribute10                       => hr_api.g_varchar2,
+                     p_attribute11                       => hr_api.g_varchar2,
+                     p_attribute12                       => hr_api.g_varchar2,
+                     p_attribute13                       => hr_api.g_varchar2,
+                     p_attribute14                       => hr_api.g_varchar2,
+                     p_attribute15                       => hr_api.g_varchar2,
+                     p_attribute16                       => hr_api.g_varchar2,
+                     p_attribute17                       => hr_api.g_varchar2,
+                     p_attribute18                       => hr_api.g_varchar2,
+                     p_attribute19                       => hr_api.g_varchar2,
+                     p_attribute20                       => hr_api.g_varchar2,
+                     p_attribute21                       => hr_api.g_varchar2,
+                     p_attribute22                       => hr_api.g_varchar2,
+                     p_attribute23                       => hr_api.g_varchar2,
+                     p_attribute24                       => hr_api.g_varchar2,
+                     p_attribute25                       => hr_api.g_varchar2,
+                     p_attribute26                       => hr_api.g_varchar2,
+                     p_attribute27                       => hr_api.g_varchar2,
+                     p_attribute28                       => hr_api.g_varchar2,
+                     p_attribute29                       => hr_api.g_varchar2,
+                     p_attribute30                       => hr_api.g_varchar2,
+                     p_per_information_category          => hr_api.g_varchar2,
+                     p_per_information1                  => hr_api.g_varchar2,
+                     p_per_information2                  => hr_api.g_varchar2,
+                     p_per_information3                  => hr_api.g_varchar2,
+                     p_per_information4                  => hr_api.g_varchar2,
+                     p_per_information5                  => hr_api.g_varchar2,
+                     p_per_information6                  => hr_api.g_varchar2,
+                     p_per_information7                  => hr_api.g_varchar2,
+                     p_per_information8                  => hr_api.g_varchar2,
+                     p_per_information9                  => hr_api.g_varchar2,
+                     p_per_information10                 => hr_api.g_varchar2,
+                     p_per_information11                 => hr_api.g_varchar2,
+                     p_per_information12                 => hr_api.g_varchar2,
+                     p_per_information13                 => hr_api.g_varchar2,
+                     p_per_information14                 => hr_api.g_varchar2,
+                     p_per_information15                 => hr_api.g_varchar2,
+                     p_per_information16                 => hr_api.g_varchar2,
+                     p_per_information17                 => hr_api.g_varchar2,
+                     p_per_information18                 => hr_api.g_varchar2,
+                     p_per_information19                 => hr_api.g_varchar2,
+                     p_per_information20                 => hr_api.g_varchar2,
+                     p_suffix                            => hr_api.g_varchar2,
+                     p_date_of_death                     => hr_api.g_date,
+                     p_background_check_status           => hr_api.g_varchar2,
+                     p_background_date_check             => hr_api.g_date,
+                     p_blood_type                        => hr_api.g_varchar2,
+                     p_correspondence_language           => hr_api.g_varchar2,
+                     p_fast_path_employee                => hr_api.g_varchar2,
+                     p_fte_capacity                      => hr_api.g_number,
+                     p_hold_applicant_date_until         => hr_api.g_date,
+                     p_honors                            => hr_api.g_varchar2,
+                     p_internal_location                 => hr_api.g_varchar2,
+                     p_last_medical_test_by              => hr_api.g_varchar2,
+                     p_last_medical_test_date            => hr_api.g_date,
+                     p_mailstop                          => hr_api.g_varchar2,
+                     p_office_number                     => hr_api.g_varchar2,
+                     p_on_military_service               => hr_api.g_varchar2,
+                     p_order_name                        => hr_api.g_varchar2,
+                     p_pre_name_adjunct                  => hr_api.g_varchar2,
+                     p_projected_start_date              => hr_api.g_date,
+                     p_rehire_authorizor                 => hr_api.g_varchar2,
+                     p_rehire_recommendation             => hr_api.g_varchar2,
+                     p_resume_exists                     => hr_api.g_varchar2,
+                     p_resume_last_updated               => hr_api.g_date,
+                     p_second_passport_exists            => hr_api.g_varchar2,
+                     p_student_status                    => hr_api.g_varchar2,
+                     p_work_schedule                     => hr_api.g_varchar2,
+                     p_per_information21                 => hr_api.g_varchar2,
+                     p_per_information22                 => hr_api.g_varchar2,
+                     p_per_information23                 => hr_api.g_varchar2,
+                     p_per_information24                 => hr_api.g_varchar2,
+                     p_per_information25                 => hr_api.g_varchar2,
+                     p_per_information26                 => hr_api.g_varchar2,
+                     p_per_information27                 => hr_api.g_varchar2,
+                     p_per_information28                 => hr_api.g_varchar2,
+                     p_per_information29                 => hr_api.g_varchar2,
+                     p_per_information30                 => hr_api.g_varchar2,
+                     p_rehire_reason                     => hr_api.g_varchar2,
+                     p_benefit_group_id                  => hr_api.g_number,
+                     p_receipt_of_death_cert_date        => hr_api.g_date,
+                     p_coord_ben_med_pln_no              => hr_api.g_varchar2,
+                     p_coord_ben_no_cvg_flag             => hr_api.g_varchar2,
+                     p_coord_ben_med_ext_er              => hr_api.g_varchar2,
+                     p_coord_ben_med_pl_name             => hr_api.g_varchar2,
+                     p_coord_ben_med_insr_crr_name       => hr_api.g_varchar2,
+                     p_coord_ben_med_insr_crr_ident      => hr_api.g_varchar2,
+                     p_coord_ben_med_cvg_strt_dt         => hr_api.g_date,
+                     p_coord_ben_med_cvg_end_dt          => hr_api.g_date,
+                     p_uses_tobacco_flag                 => hr_api.g_varchar2,
+                     p_dpdnt_adoption_date               => hr_api.g_date,
+                     p_dpdnt_vlntry_svce_flag            => hr_api.g_varchar2,
+                     p_original_date_of_hire             => hr_api.g_date,
+                     p_town_of_birth                     => hr_api.g_varchar2,
+                     p_region_of_birth                   => hr_api.g_varchar2,
+                     p_country_of_birth                  => hr_api.g_varchar2,
+                     p_global_person_id                  => hr_api.g_varchar2,
+                     p_party_id                          => hr_api.g_number,
+                     p_npw_number                        => x_npw_number,
+                     p_current_npw_flag                  => hr_api.g_varchar2,
+                     p_object_version_number             => x_object_version_number,
+                     p_effective_date                    => '06-march-2010',
+                     p_datetrack_mode                    => 'CORRECTION',
+                     p_validate                          => FALSE,
+                     p_name_combination_warning          => x_name_combination_warning,
+                     p_dob_null_warning                  => x_dob_null_warning,
+                     p_orig_hire_warning                 => x_orig_hire_warning
+                    );
+      ---commit;
+   END update_employ;
+
+   PROCEDURE create_vendor (
+      l_emp_rec_type            r_emp_rec_type,
+      ret_status       OUT      VARCHAR2,
+      api_err          OUT      VARCHAR2,
+      pperson_id       IN       NUMBER,
+      vvendor_id       OUT      NUMBER
+   )
+   IS
+     --- PRAGMA AUTONOMOUS_TRANSACTION;
+      l_vendor_rec      ap_vendor_pub_pkg.r_vendor_rec_type;
+      l_msg_count       NUMBER;
+      l_msg_data        VARCHAR2 (250);
+      l_return_status   VARCHAR2 (250);
+      l_vendor_id       NUMBER;
+      l_party_id        NUMBER;
+      l_vendor_name     VARCHAR2 (250);
+      l_enabled_flag    VARCHAR2 (250);
+      l_email_id        VARCHAR2 (250);
+      l_vendor_last     VARCHAR2 (250);
+   BEGIN
+      DBMS_OUTPUT.put_line ('IN THE VENDOR BLOCK' || pperson_id);
+      l_vendor_name := l_emp_rec_type.first_name;
+      l_vendor_last := l_emp_rec_type.last_name;
+      l_enabled_flag := 'Y';
+      fnd_client_info.set_org_context ('102');
+      mo_global.set_policy_context ('S', 102);
+      l_msg_count := 0;
+      -- l_vendor_rec.segment1 := l_vendor_name;
+      l_vendor_rec.vendor_name_alt := l_vendor_name;
+      l_vendor_rec.vendor_name := l_vendor_name;
+      l_vendor_rec.enabled_flag := l_enabled_flag;
+      l_vendor_rec.summary_flag := 'N';
+      l_vendor_rec.employee_id := pperson_id;
+      l_vendor_rec.vendor_type_lookup_code := 'EMPLOYEE';
+      l_vendor_rec.federal_reportable_flag := 'Y';
+      l_vendor_rec.terms_date_basis := 'Invoice';
+      l_vendor_rec.invoice_currency_code := 'INR';
+      l_vendor_rec.payment_currency_code := 'INR';
+      l_vendor_rec.ATTRIBUTE2:=l_emp_rec_type.pan_number;
+      l_vendor_rec.attribute1:='Individual-IND';
+--      l_vendor_rec.last_name:=l_vendor_last;
+      l_vendor_rec.vendor_interface_id := ap_suppliers_int_s.NEXTVAL;
+      ap_vendor_pub_pkg.create_vendor
+                           (p_api_version           => 1.0,
+                            p_init_msg_list         => fnd_api.g_false,
+                            p_commit                => fnd_api.g_false,
+                            p_validation_level      => fnd_api.g_valid_level_full,
+                            x_return_status         => l_return_status,
+                            x_msg_count             => l_msg_count,
+                            x_msg_data              => l_msg_data,
+                            p_vendor_rec            => l_vendor_rec,
+                            x_vendor_id             => l_vendor_id,
+                            x_party_id              => l_party_id
+                           );
+      DBMS_OUTPUT.put_line ('return status=' || l_return_status);
+      DBMS_OUTPUT.put_line ('msg count=' || l_msg_count);
+
+      IF l_msg_count >= 1
+      THEN
+         FOR i IN 1 .. l_msg_count
+         LOOP
+             DBMS_OUTPUT.PUT_LINE('Error '||FND_MSG_PUB.GET(i, 'F'));
+                    api_err:=api_err||('Error '||FND_MSG_PUB.GET(i, 'F'));
+         END LOOP;
+         ret_status:=l_return_status;
+      ELSE
+         DBMS_OUTPUT.put_line ('VENDOR ID=' || l_vendor_id);
+         vvendor_id := l_vendor_id;
+-----commit;
+      END IF;
+
+      ---commit;
+   END create_vendor;
+
+   PROCEDURE update_vendor (
+      l_emp_rec_type         r_emp_rec_type,
+      ret_status       OUT   VARCHAR2,
+      api_err          OUT   VARCHAR2
+   )
+   IS
+     --- PRAGMA AUTONOMOUS_TRANSACTION;
+      l_vendor_rec      ap_vendor_pub_pkg.r_vendor_rec_type;
+      l_msg_count       NUMBER;
+      l_msg_data        VARCHAR2 (250);
+      l_return_status   VARCHAR2 (250);
+      l_vendor_id       NUMBER;
+      l_party_id        NUMBER;
+      LF NUMBER;
+      
+   BEGIN
+   LF:=1;
+      fnd_client_info.set_org_context ('102');
+      mo_global.set_policy_context ('S', 102);
+      l_vendor_rec.federal_reportable_flag := 'N';
+--l_vendor_rec.ENABLED_FLAG:='Y';
+
+        BEGIN
+        select aps.vendor_id into l_vendor_id from ap_suppliers aps,ap_supplier_sites_all apss
+        where
+        aps.vendor_id=apss.vendor_id
+        and
+        aps.vendor_name=l_emp_rec_type.first_name||' '||l_emp_rec_type.last_name
+        and
+        apss.vendor_site_code like 'OFFICE';
+        EXCEPTION
+        WHEN OTHERS THEN
+        LF:=0;
+        DBMS_OUTPUT.PUT_LINE('EXCEPTION IN FETCHING VENDOR_ID IN BLOCK UPDATE VENDOR');
+        END;
+        
+                IF LF=1 THEN
+                
+        
+                    ap_vendor_pub_pkg.update_vendor
+                           (p_api_version           => 1.0,
+                            p_init_msg_list         => fnd_api.g_false,
+                            p_commit                => fnd_api.g_false,
+                            p_validation_level      => fnd_api.g_valid_level_full,
+                            x_return_status         => l_return_status,
+                            x_msg_count             => l_msg_count,
+                            x_msg_data              => l_msg_data,
+                            p_vendor_rec            => l_vendor_rec,
+                            p_vendor_id             => 16010
+                           );
+      DBMS_OUTPUT.put_line ('return status=' || l_return_status);
+
+                                    IF l_msg_count > 1
+                                        THEN
+                                         FOR i IN 1 .. l_msg_count
+                                         LOOP
+                                         DBMS_OUTPUT.PUT_LINE('Error '||FND_MSG_PUB.GET(i, 'F'));
+                                         api_err:=api_err||('Error '||FND_MSG_PUB.GET(i, 'F'));
+           
+                                                        END LOOP;
+                                    END IF;
+            ELSE 
+                      DBMS_OUTPUT.PUT_LINE('VENDOR COULD NOT BE UPDATED');
+                       api_err :=api_err||' VENDOR COULD NOT BE UPDATED';
+                       L_RETURN_STATUS:='E';
+            END IF;
+
+     
+   END update_vendor;
+
+   PROCEDURE create_supplier_site (
+      l_emp_rec_type             r_emp_rec_type,
+      ret_status        OUT      VARCHAR2,
+      api_err           OUT      VARCHAR2,
+      vvendor_id        IN       NUMBER,
+      vvendor_site_id   OUT      NUMBER
+   )
+   IS
+     --- PRAGMA AUTONOMOUS_TRANSACTION;
+      l_vendor_site_rec_type   ap_vendor_pub_pkg.r_vendor_site_rec_type;
+      l_return_status          VARCHAR2 (250);
+      l_msg_count              VARCHAR2 (250);
+      l_msg_data               VARCHAR2 (250);
+      l_vendor_site_id         NUMBER;
+      l_party_site_id          NUMBER;
+      l_location_id            NUMBER;
+      l_email_id               VARCHAR2 (250);
+      l_address                VARCHAR2 (250);
+      l_site                   VARCHAR2 (250);
+      pvendor_site_id          NUMBER;
+   BEGIN
+    l_msg_count := 0;
+      DBMS_OUTPUT.put_line ('SUPPLIER_ID GOT IS ' || vvendor_id);
+      l_email_id := l_emp_rec_type.email_id;
+      l_address := l_emp_rec_type.address;
+      l_site := l_emp_rec_type.office;
+      fnd_client_info.set_org_context ('102');
+      mo_global.set_policy_context ('S', 102);
+      l_vendor_site_rec_type.vendor_site_code :=l_emp_rec_type.office ;
+      l_vendor_site_rec_type.vendor_site_interface_id :=
+                                              ap_supplier_sites_int_s.NEXTVAL;
+      l_vendor_site_rec_type.vendor_id := vvendor_id;
+      l_vendor_site_rec_type.pay_site_flag := 'Y';
+      l_vendor_site_rec_type.purchasing_site_flag := 'Y';
+      l_vendor_site_rec_type.address_line1 := l_address;
+      l_vendor_site_rec_type.city := NULL;
+      l_vendor_site_rec_type.state := NULL;
+      l_vendor_site_rec_type.zip := NULL;
+      l_vendor_site_rec_type.area_code := NULL;
+      l_vendor_site_rec_type.country := 'IN';
+      l_vendor_site_rec_type.phone := NULL;
+      l_vendor_site_rec_type.vat_registration_num := NULL;
+      l_vendor_site_rec_type.hold_all_payments_flag := NULL;
+      l_vendor_site_rec_type.org_id := 102;
+      l_vendor_site_rec_type.match_option := NULL;
+      l_vendor_site_rec_type.terms_id := 10000;
+      l_vendor_site_rec_type.attribute1 := NULL;
+      l_vendor_site_rec_type.offset_tax_flag := NULL;
+      l_vendor_site_rec_type.inactive_date := NULL;
+      l_vendor_site_rec_type.fax := NULL;
+      l_vendor_site_rec_type.email_address := l_email_id;
+      l_vendor_site_rec_type.ADDRESS_STYLE:='POSTAL_ADDR_DEF';
+      ap_vendor_pub_pkg.create_vendor_site
+                           (p_api_version           => 1.0,
+                            p_init_msg_list         => fnd_api.g_false,
+                            p_commit                => fnd_api.g_false,
+                            p_validation_level      => fnd_api.g_valid_level_full,
+                            x_return_status         => l_return_status,
+                            x_msg_count             => l_msg_count,
+                            x_msg_data              => l_msg_data,
+                            p_vendor_site_rec       => l_vendor_site_rec_type,
+                            x_vendor_site_id        => l_vendor_site_id,
+                            x_party_site_id         => l_party_site_id,
+                            x_location_id           => l_location_id
+                           );
+      DBMS_OUTPUT.put_line ('return status=' || l_return_status);
+      DBMS_OUTPUT.put_line ('msg count=' || l_msg_count);
+
+      IF l_return_status <> 'S' OR l_msg_count >= 1
+      THEN
+         DBMS_OUTPUT.put_line ('VENDOR SITE CREATION FAILED');
+
+         FOR i IN 1 .. l_msg_count
+         LOOP
+            DBMS_OUTPUT.PUT_LINE('Error '||FND_MSG_PUB.GET(i, 'F'));
+                    api_err:=api_err||('Error '||FND_MSG_PUB.GET(i, 'F'));
+         END LOOP;
+         ret_status:=l_return_status;
+      ELSE
+         DBMS_OUTPUT.put_line ('VENDOR site ID=' || l_vendor_site_id);
+         vvendor_site_id := l_vendor_site_id;
+-----commit;
+      END IF;
+   
+
+      ---commit;
+   END create_supplier_site;
+
+   PROCEDURE update_vendor_site (
+      l_emp_rec_type         r_emp_rec_type,
+      ret_status       OUT   VARCHAR2,
+      api_err          OUT   VARCHAR2
+   )
+   IS
+     --- PRAGMA AUTONOMOUS_TRANSACTION;
+      l_vendor_site_rec_type   ap_vendor_pub_pkg.r_vendor_site_rec_type;
+      l_return_status          VARCHAR2 (250);
+      l_msg_count              NUMBER;
+      l_msg_data               VARCHAR2 (250);
+   BEGIN
+      fnd_client_info.set_org_context ('102');
+      mo_global.set_policy_context ('S', 102);
+      l_vendor_site_rec_type.address_line1 := 'OFFICE1_UPD';
+      ap_vendor_pub_pkg.update_vendor_site
+                           (p_api_version           => 1.0,
+                            p_init_msg_list         => fnd_api.g_false,
+                            p_commit                => fnd_api.g_false,
+                            p_validation_level      => fnd_api.g_valid_level_full,
+                            x_return_status         => l_return_status,
+                            x_msg_count             => l_msg_count,
+                            x_msg_data              => l_msg_data,
+                            p_vendor_site_rec       => l_vendor_site_rec_type,
+                            p_vendor_site_id        => 405,
+                            p_calling_prog          => 'NOT ISETUP'
+                           );
+      DBMS_OUTPUT.put_line ('return status=' || l_return_status);
+
+      IF l_msg_count > 1
+      THEN
+         FOR i IN 1 .. l_msg_count
+         loop
+        DBMS_OUTPUT.PUT_LINE('Error '||FND_MSG_PUB.GET(i, 'F'));
+                    api_err:=api_err||('Error '||FND_MSG_PUB.GET(i, 'F'));
+                    end loop;
+--else
+-----commit;
+      END IF;
+
+      ---commit;
+   END update_vendor_site;
+
+   PROCEDURE handle_err (e_cont IN NUMBER, error_m IN VARCHAR2)
+   IS
+   BEGIN
+      IF (e_cont = 1)
+      THEN
+         DBMS_OUTPUT.put_line ('INVALID ' || error_m);    ----INVALID CONTEXT
+      ELSIF (e_cont = 2)
+      THEN
+         DBMS_OUTPUT.put_line (' DUPLICATE EXISTS ' || error_m);
+      ---ALREADY EXST CONTEXT
+      ELSIF (e_cont = 3)
+      THEN
+         DBMS_OUTPUT.put_line (error_m || ' CREATION FAILED');
+      --CREATION FAILED
+      ELSIF (e_cont = 4)
+      THEN
+         DBMS_OUTPUT.put_line (error_m || 'DOES NOT EXIST FOR UPADATE');
+      ----DOES NOT EXIST FOR UPADATE
+      ELSIF (e_cont = 5)
+      THEN
+         DBMS_OUTPUT.put_line (error_m || ' UPDATION FAILED');
+      ---UPDATION FAILED
+      END IF;
+   END handle_err;
+
+   PROCEDURE create_bank (
+      l_emp_rec_type          r_emp_rec_type,
+      ret_status        OUT   VARCHAR2,
+      api_err           OUT   VARCHAR2,
+      vvendor_id              NUMBER,
+      vvendor_site_id         NUMBER
+   )
+   IS
+     --- PRAGMA AUTONOMOUS_TRANSACTION;
+      dummy                   NUMBER;
+      l_bank_name             VARCHAR2 (250);
+      l_bank_branch           VARCHAR2 (250);
+      l_bank_account          VARCHAR2 (250);
+      l_bank_id               NUMBER;
+      l_bank_branch_id        NUMBER;
+      
+      l_ext_bank_rec          iby_ext_bankacct_pub.extbank_rec_type;
+      l_ext_bank_branch_rec   iby_ext_bankacct_pub.extbankbranch_rec_type;
+      l_result_rec_type       iby_fndcpt_common_pub.result_rec_type;
+      s_msg                   VARCHAR2 (1000);
+      v_flag                  VARCHAR2 (10);
+      l_return_status         VARCHAR2 (250);
+      l_ifsc_code             VARCHAR (250);
+      l_micr_number           VARCHAR2 (250);
+      l_api_version           NUMBER                                   := 1.0;
+      l_init_msg_list         VARCHAR2 (1)                         := g_false;
+      l_ext_bank_acct_rec     iby_ext_bankacct_pub.extbankacct_rec_type;
+      b_creat                 NUMBER;
+      b_exist                 NUMBER;
+      bb_creat                NUMBER;
+      bb_exist                NUMBER;
+      ba_creat                NUMBER;
+      ba_exist                NUMBER;
+      lc_error_message        VARCHAR2 (1000);
+      l_msg_count             NUMBER;
+      l_msg_data              VARCHAR2 (250);
+      L_ACCT_ID number;
+--l_return_status varchar2(250);
+      l_end_date              DATE;
+      l_association_level     VARCHAR2 (250);
+      ecount                  NUMBER;
+      xl_bank_id              NUMBER;
+      l_party_Id  number;
+      xl_bank_branch_id       NUMBER;
+      l_start_date DATE;
+      
+   BEGIN
+      DBMS_OUTPUT.put_line ('INTO CREATE BANK');
+      DBMS_OUTPUT.put_line ('VENDOR ID IS ' || vvendor_id);
+      DBMS_OUTPUT.put_line ('vvendor_site_id ' || vvendor_site_id);
+      l_bank_name := l_emp_rec_type.bank_name;
+      l_bank_branch := l_emp_rec_type.bank_branch;
+      l_bank_account := l_emp_rec_type.bank_account;
+      l_ifsc_code := l_emp_rec_type.ifsc_code;
+    --l_MICR_NUMBER:=l_emp_rec_type.micr_number;
+      l_bank_id := NULL;
+      l_bank_branch_id := NULL;
+      l_acct_id := NULL;
+      fnd_client_info.set_org_context ('102');
+      mo_global.set_policy_context ('S', 102);
+      b_creat := 0;
+      b_exist := 0;
+      bb_creat := 0;
+      bb_exist := 0;
+      ba_creat := 0;
+      ba_exist := 0;
+      l_bank_id := NULL;
+      DBMS_OUTPUT.put_line ('into bank');
+      
+      iby_ext_bankacct_pub.check_bank_exist
+                                         (p_api_version        => 1.0,
+                                          p_init_msg_list      => g_false,
+                                          p_country_code       => 'IN',
+                                          p_bank_name          => l_bank_name,
+                                          p_bank_number        => NULL,
+                                          x_return_status      => l_return_status,
+                                          x_msg_count          => l_msg_count,
+                                          x_msg_data           => l_msg_data,
+                                          x_bank_id            => l_bank_id,
+                                          x_end_date           => l_end_date,
+                                          x_response           => l_result_rec_type
+                                         );
+
+      IF l_return_status = 'S'
+      THEN
+         IF l_bank_id IS NULL
+         THEN
+            SELECT COUNT (*)
+              INTO dummy
+              FROM hz_parties
+             WHERE party_name = l_bank_name;
+
+            IF dummy < 1
+            THEN
+               DBMS_OUTPUT.put_line ('bank does not exists ' || l_bank_name);
+               l_ext_bank_rec.bank_name := l_bank_name;
+               l_ext_bank_rec.country_code := 'IN';
+               l_return_status:=null;
+               iby_ext_bankacct_pub.create_ext_bank
+                                         (p_api_version        => 1.0,
+                                           p_init_msg_list        =>'G_FALSE',
+                                          p_ext_bank_rec       => l_ext_bank_rec,
+                                          x_bank_id            => l_bank_id,
+                                          x_return_status      => l_return_status,
+                                          x_msg_count          => l_msg_count,
+                                          x_msg_data           => l_msg_data,
+                                          x_response           => l_result_rec_type
+                                         );
+               DBMS_OUTPUT.put_line (   'bank return status is '
+                                     || l_return_status
+                                    );
+
+               IF l_return_status = 'S'
+               THEN
+                  s_msg := 'bank created';
+                  DBMS_OUTPUT.put_line ('Bank created ' || l_bank_id);
+                  b_creat := 1;
+                  ---commit;
+               ELSE
+                  IF l_msg_count > 0
+                  THEN
+                     FOR i IN 1 .. l_msg_count
+                     LOOP
+                        DBMS_OUTPUT.PUT_LINE('Error '||FND_MSG_PUB.GET(i, 'F'));
+                    api_err:=api_err||('Error '||FND_MSG_PUB.GET(i, 'F'));
+                     END LOOP;
+                  ELSE
+                     lc_error_message :=
+                                        lc_error_message || l_msg_data || ',';
+                  END IF;
+               END IF;
+            ELSE
+               b_exist := 1;
+               DBMS_OUTPUT.put_line ('bank exists');
+               lc_error_message := lc_error_message || 'bank exists';
+            END IF;
+         ELSE
+            DBMS_OUTPUT.put_line ('BANK ALREADY EXISTS BANK ID IS  '||L_BANK_ID);
+            b_exist := 1;
+         END IF;
+      ELSE
+         ret_status := 'U';
+      END IF;
+
+      IF b_creat = 1 OR b_exist = 1
+      THEN
+      
+      
+      
+      
+        l_return_status:=null;
+          
+         l_bank_branch_id:=null;
+         
+      
+         DBMS_OUTPUT.put_line ('into bank branch test'||l_bank_id||'-'||l_bank_branch );
+         iby_ext_bankacct_pub.check_ext_bank_branch_exist
+                                         (p_api_version        => 1.0,
+                                          p_init_msg_list      => NULL,
+                                          p_bank_id            => l_bank_id,
+                                          p_branch_name        => l_bank_branch,
+                                          p_branch_number      => NULL,
+                                          x_return_status      => l_return_status,
+                                          x_msg_count          => l_msg_count,
+                                          x_msg_data           => l_msg_data,
+                                          x_branch_id          => l_bank_branch_id,
+                                          x_end_date           => l_end_date,
+                                          x_response           => l_result_rec_type
+                                         );
+
+         IF l_bank_branch_id IS NULL AND l_return_status = 'S'
+         THEN
+         dbms_output.put_line('bank branch does not exist');
+         
+             l_bank_name := l_emp_rec_type.bank_name;
+             l_bank_branch := l_emp_rec_type.bank_branch;
+             l_bank_account := l_emp_rec_type.bank_account;
+             l_ifsc_code := l_emp_rec_type.ifsc_code;
+             
+             
+            l_return_status := NULL;
+            l_msg_count := 0;
+            l_ext_bank_branch_rec.branch_name := l_bank_branch;
+            l_ext_bank_branch_rec.branch_type := 'OTHER';
+            l_ext_bank_branch_rec.alternate_branch_name := l_bank_branch;
+            l_ext_bank_branch_rec.bank_party_id := l_bank_id;
+            --l_ext_bank_branch_rec.description := l_micr_number;
+            
+            
+            
+            iby_ext_bankacct_pub.create_ext_bank_branch
+                             (p_api_version              => 1.0,
+                              p_init_msg_list            => fnd_api.g_false,
+                              p_ext_bank_branch_rec      => l_ext_bank_branch_rec,
+                              x_branch_id                => l_bank_branch_id,
+                              x_return_status            => l_return_status,
+                              x_msg_count                => l_msg_count,
+                              x_msg_data                 => l_msg_data,
+                              x_response                 => l_result_rec_type
+                             );
+
+            IF l_return_status = 'S'
+            THEN
+               ---commit;
+               bb_creat := 1;
+               s_msg :=
+                   s_msg || ' ' || 'bank branch created ' || l_bank_branch_id;
+               DBMS_OUTPUT.put_line ('bank branch created' || l_bank_branch_id
+                                    );
+            ELSE
+               IF l_msg_count > 0
+               THEN
+                  FOR i IN 1 .. l_msg_count
+                  LOOP
+                     DBMS_OUTPUT.PUT_LINE('Error '||FND_MSG_PUB.GET(i, 'F'));
+                    api_err:=api_err||('Error '||FND_MSG_PUB.GET(i, 'F'));
+                  END LOOP;
+               ELSE
+                  lc_error_message := lc_error_message || l_msg_data || ',';
+               END IF;
+
+               lc_error_message :=
+                        lc_error_message || 'Bank branch could not be created';
+               DBMS_OUTPUT.put_line ('bank branch could not be created');
+            END IF;
+         ELSE
+            bb_exist := 1;
+            DBMS_OUTPUT.put_line ('bank branch exists');
+            lc_error_message := lc_error_message || '--bank branch exists--';
+         END IF;
+      END IF;
+
+      IF bb_creat = 1 OR bb_exist = 1
+      THEN
+         ---commit;
+         L_ACCT_ID:=NULL;
+         
+           begin
+            select max(party_id) into l_party_Id from ap_suppliers ap,ap_supplier_sites ass where
+            ap.vendor_id=ass.vendor_id
+            and
+            ap.vendor_name = l_emp_rec_type.first_name||' '||l_emp_rec_type.last_name
+            and ass.vendor_site_code=l_emp_rec_type.office;
+            
+           exception when others then
+                null;
+            end; 
+                 l_acct_id:=null;                                                  
+         l_return_status:=null;
+         DBMS_OUTPUT.put_line ('into account creation');
+         DBMS_OUTPUT.put_line (l_bank_id || '-' || l_bank_branch_id);
+         DBMS_OUTPUT.put_line ('account_number' || l_bank_account);
+         
+             l_ext_bank_acct_rec.bank_account_num:=l_bank_account;
+             l_ext_bank_acct_rec.country_code:='IN';
+             l_ext_bank_acct_rec.branch_id:=l_bank_branch_id;
+             l_ext_bank_acct_rec.bank_id:=l_bank_id;
+             l_ext_bank_acct_rec.acct_owner_party_id:=l_party_id;           
+             L_ACCT_ID:=null;
+             
+     iby_ext_bankacct_pub.check_ext_acct_exist(
+    p_api_version            =>1.0,
+    p_init_msg_list          =>null,
+    p_ext_bank_acct_rec      =>l_ext_bank_acct_rec,
+    x_acct_id                =>L_ACCT_ID,
+    x_start_date             =>L_START_DATE,
+    x_end_date                 =>L_END_DATE,
+    x_return_status          =>l_return_status,
+    x_msg_count              =>l_msg_count,
+    x_msg_data               =>l_msg_data,
+    x_response               =>l_result_rec_type);
+  
+    if l_return_status='S' then
+    
+           if L_ACCT_ID is null then
+           
+           select max(party_id) into l_party_Id from ap_suppliers where vendor_name = l_emp_rec_type.first_name
+                                                              ||' '||l_emp_rec_type.last_name;
+                                                              
+            dbms_output.put_line('party_id is'||l_party_id);                                                              
+            l_return_status:=null;
+         l_ext_bank_acct_rec.object_version_number := 1.0;
+         --l_ext_bank_acct_rec.acct_owner_party_id := 19021;
+         l_ext_bank_acct_rec.bank_account_num := l_bank_account;
+         l_ext_bank_acct_rec.bank_id := l_bank_id;
+         l_ext_bank_acct_rec.branch_id := l_bank_branch_id;
+         l_ext_bank_acct_rec.acct_owner_party_id := l_party_Id;
+         l_ext_bank_acct_rec.country_code := 'IN';
+         l_association_level := 'SS';
+         l_return_status:=null;
+         iby_ext_bankacct_pub.create_ext_bank_acct
+                                 (p_api_version            => 1.0,
+                                  p_init_msg_list          => NULL,
+                                  p_ext_bank_acct_rec      => l_ext_bank_acct_rec,
+                                    --p_association_level    =>l_association_level,
+                                  --  p_supplier_site_id     =>449,
+                                   -- p_party_site_id        =>l_party_site_id,
+                                   -- p_org_id               =>G_ORG_ID,
+                                  x_acct_id                => l_acct_id,
+                                  x_return_status          => l_return_status,
+                                  x_msg_count              => l_msg_count,
+                                  x_msg_data               => l_msg_data,
+                                  x_response               => l_result_rec_type
+                                 );
+         DBMS_OUTPUT.put_line (   'Return status for account creation is '
+                               || l_return_status
+                              );
+                              
+                             -- l_account_id
+
+         IF l_return_status = 'S'
+         THEN
+            ba_creat := 1;
+            s_msg := s_msg || 'bank account created :' || l_acct_id;
+            DBMS_OUTPUT.put_line ('bank account created '|| l_acct_id);
+            ---commit;
+         ELSE
+            lc_error_message :=
+                       lc_error_message || 'Error from Create bank account :';
+
+            IF l_msg_count > 0
+               THEN
+                  FOR i IN 1 .. l_msg_count
+                  LOOP
+                     DBMS_OUTPUT.PUT_LINE('Error '||FND_MSG_PUB.GET(i, 'F'));
+                    api_err:=api_err||('Error '||FND_MSG_PUB.GET(i, 'F'));
+                  END LOOP;
+               ELSE
+                  lc_error_message := lc_error_message || l_msg_data || ',';
+               END IF;
+
+            DBMS_OUTPUT.put_line ('failure account creation');
+         END IF;
+         
+         else
+         dbms_output.put_line('bank account already exists ACCOUNT ID IS'||l_acct_id);
+         ba_exist:=1;
+         end if;
+    end if;
+      END IF;
+
+      api_err := lc_error_message || '---' || s_msg;
+      ---commit;
+   END create_bank;
+
+   PROCEDURE update_bank_account (
+      l_emp_rec_type         r_emp_rec_type,
+      ret_status       OUT   VARCHAR2
+   )
+   IS
+      l_object_version_number   NUMBER;
+      l_return_status           VARCHAR2 (250);
+      l_msg_count               NUMBER;
+      l_msg_data                VARCHAR2 (250);
+      l_bank_id                 NUMBER;
+      l_end_date date;
+   BEGIN
+      SELECT party_id
+        INTO l_bank_id
+        FROM hz_parties
+       WHERE party_name = l_emp_rec_type.bank_account;
+       
+   l_end_date:= l_emp_rec_type.inactive_date;
+      ce_bank_pub.update_bank
+                          (p_init_msg_list                => fnd_api.g_false,
+                           p_bank_id                      => l_bank_id,
+                           p_bank_name                    => l_emp_rec_type.bank_account,
+                           p_bank_number                  => NULL,
+                           p_alternate_bank_name          => NULL,
+                           p_short_bank_name              => NULL,
+                           p_description                  => NULL,
+                           p_tax_payer_id                 => NULL,
+                           p_tax_registration_number      => NULL,
+                           p_attribute_category           => NULL,
+                           p_attribute1                   => NULL,
+                           p_attribute2                   => NULL,
+                           p_attribute3                   => NULL,
+                           p_attribute4                   => NULL,
+                           p_attribute5                   => NULL,
+                           p_attribute6                   => NULL,
+                           p_attribute7                   => NULL,
+                           p_attribute8                   => NULL,
+                           p_attribute9                   => NULL,
+                           p_attribute10                  => NULL,
+                           p_attribute11                  => NULL,
+                           p_attribute12                  => NULL,
+                           p_attribute13                  => NULL,
+                           p_attribute14                  => NULL,
+                           p_attribute15                  => NULL,
+                           p_attribute16                  => NULL,
+                           p_attribute17                  => NULL,
+                           p_attribute18                  => NULL,
+                           p_attribute19                  => NULL,
+                           p_attribute20                  => NULL,
+                           p_attribute21                  => NULL,
+                           p_attribute22                  => NULL,
+                           p_attribute23                  => NULL,
+                           p_attribute24                  => NULL,
+                           p_object_version_number        => l_object_version_number,
+                           x_return_status                => l_return_status,
+                           x_msg_count                    => l_msg_count,
+                           x_msg_data                     => l_msg_data
+                          );
+                          
+                          
+        ce_bank_pub.set_bank_end_date (
+        p_init_msg_list            => fnd_api.g_false,
+        p_bank_id                  =>l_bank_id,
+        p_end_date                    =>l_end_date,
+         p_object_version_number   =>l_object_version_number,
+        x_return_status            =>l_return_status,
+        x_msg_count                =>l_msg_count,
+        x_msg_data                 =>l_msg_data);
+ 
+      IF l_return_status <> 'S'
+      THEN
+         DBMS_OUTPUT.put_line ('BANK UPDATION FAILED');
+      ELSE
+         DBMS_OUTPUT.put_line ('BANK UPDATION SUCCED');
+      END IF;
+   END update_bank_account;
+
+   function p_validate(i in r_emp_rec_type, e_msg out varchar2) return number  is
+      error_msg varchar2(2500);
+      dummy1 number;
+   
+   begin
+   error_msg:=null;
+   
+   
+   select 
+   count(*) 
+      into dummy1
+    from 
+   ap_suppliers app,
+   ap_supplier_sites apss
+   where
+   app.vendor_id=apss.vendor_id
+   and 
+   apss.vendor_site_code='OFFICE'
+   and
+   app.vendor_name like i.first_name||' '||i.last_name;
+     if dummy1>1 then
+    error_msg:='vendor and site already exists'||','||error_msg;
+     end if;
+     
+    
+   
+
+        if
+        i.employee_number is null then
+            error_msg:='null emp number'||','||error_msg;
+            
+         elsif i.last_name is null then
+            error_msg:='null last name'||','||error_msg;   
+          elsif i.first_name is null then
+            error_msg:='first name'||','||error_msg;
+            elsif i.date_of_birth >sysdate then
+            error_msg:='date of birth cant be greater than sys date'||','||error_msg;
+            
+        --  elsif i.hire_date is null then
+         -- error_msg:='hire date is null'||','||error_msg;
+          elsif i.date_of_birth is null then
+          error_msg:='birth date is null'||','||error_msg;
+          elsif i.sex is null then
+          error_msg:='gender is null'||','||error_msg;
+          elsif i.office is null then
+          error_msg:='office is null'||','||error_msg;
+          elsif i.bank_name is null then
+          error_msg:='bank name is null'||','||error_msg;
+          elsif i.bank_account is null then
+          error_msg:='bank account is null'||','||error_msg;
+          elsif i.payment_method_code is null then
+          error_msg:='pay ment method code is null'||','||error_msg;
+          elsif i.pay_group is null then
+          error_msg:='pay group is null'||','||error_msg;
+          
+          elsif i.employment_start_date is null then
+          error_msg:='emp start date is null'||','||error_msg;
+
+         -- elsif i.employee_end_date is null then
+          --error_msg:='emp end date is null'||','||error_msg;
+          
+          
+          elsif i.address is null then
+          error_msg:='address is null'||','||error_msg;
+          
+          elsif i.supplier_status is null then
+          error_msg:='vendor status is null'||','||error_msg;
+          
+         -- elsif i.inactive_date is null then
+          --error_msg:='inactive date is null'||','||error_msg;
+          
+          else null;
+          end if;
+           e_msg:=error_msg;
+          
+          
+          
+         if error_msg is not null then
+          return 0;
+          else
+          return 1;
+          end if;
+          
+      end p_validate;
+   procedure misc is
+      cursor c1 is select * from xx_emp_tab for update of employee_number;
+   PRAGMA AUTONOMOUS_TRANSACTION;
+   begin
+   
+   for i in c1 loop
+        if i.ifsc_code is not null and i.bank_account is not null then
+        update xx_emp_tab set payment_method_code='NEFT' where current of c1;
+        else
+        update xx_emp_tab set payment_method_code='Check' where current of c1;
+        
+        end if;
+        
+        if  i.sex like'MA%' then 
+        update xx_emp_tab set sex='M' where current of c1;
+        elsif i.sex like 'FE%' then
+        update xx_emp_tab set sex='F' where current of c1;
+        end if;
+        
+        if i.sex=null then
+    if i.title like '%MR%' or  i.title like '%Mr%'
+            then
+                update xx_emp_tab set sex='M' where current of c1;
+                elsif
+                i.title like '%Ms%' or i.title like '%MS%' or i.title like '%MRS%' or i.title like '%Mrs%' then
+                update xx_emp_tab set sex='F' where current of c1;
+                
+      end if;
+       end if;
+        --update xx_emp_tab set supplier_status='E' where current of c1; 
+        
+     end loop;
+     commit;
+     
+     end misc;
+   
+   PROCEDURE main_p
+   IS
+      CURSOR c1
+      IS
+         SELECT        *
+                  FROM xx_emp_tab where int_status like '%N%' or int_status like '%E%'
+         FOR UPDATE OF employee_number;
+
+--PRAGMA AUTONOMOUS_TRANSACTION;
+      dummy             NUMBER;
+      s_f               NUMBER;
+      ret_status        VARCHAR2 (250);
+      e_msg             VARCHAR2 (1000);
+      api_emsg          VARCHAR2 (1000);
+      e_msga            VARCHAR2 (1000);
+      api_errorr        VARCHAR2 (2500);
+      l_emp_rec_type    r_emp_rec_type;
+      pperson_id        NUMBER;
+      pvendor_id        NUMBER;
+      pvendor_site_id   NUMBER;
+      a number;
+   BEGIN
+   misc;
+  
+      FOR i IN c1
+      LOOP
+      dbms_output.put_line('------------------------start-----------------');
+      dbms_output.put_line('-----------------------------------------');
+       
+         
+         s_f := 1;
+         e_msga := NULL;
+         api_emsg := NULL;
+         ret_status := NULL;
+         dummy := NULL;
+         l_emp_rec_type.employee_number := i.employee_number;
+         l_emp_rec_type.last_name := i.last_name;
+         l_emp_rec_type.first_name := i.first_name;
+         l_emp_rec_type.title := i.title;
+         l_emp_rec_type.hire_date := i.hire_date;
+         l_emp_rec_type.date_of_birth := i.date_of_birth;
+         l_emp_rec_type.sex := i.sex;
+         l_emp_rec_type.job := i.job;
+         l_emp_rec_type.grade := i.grade;
+         l_emp_rec_type.supervisor_name := i.supervisor_name;
+         l_emp_rec_type.set_of_books := i.set_of_books;
+         l_emp_rec_type.default_expense_account := i.default_expense_account;
+         l_emp_rec_type.office := 'OFFICE';
+         l_emp_rec_type.bank_name := i.bank_name;
+         l_emp_rec_type.bank_branch := i.bank_branch;
+         l_emp_rec_type.bank_account := i.bank_account;
+         l_emp_rec_type.date_of_joining := i.date_of_joining;
+         l_emp_rec_type.email_id := i.email_id;
+         l_emp_rec_type.payment_method_code := i.payment_method_code;
+         l_emp_rec_type.pay_group := i.pay_group;
+         l_emp_rec_type.prepayment_account := i.prepayment_account;
+         l_emp_rec_type.liability_account := i.liability_account;
+         l_emp_rec_type.pan_number := i.pan_number;
+         l_emp_rec_type.ifsc_code := i.ifsc_code;
+         l_emp_rec_type.ledger := i.ledger;
+         l_emp_rec_type.ORGANIZATION := i.ORGANIZATION;
+         l_emp_rec_type.employment_start_date := i.employment_start_date;
+         l_emp_rec_type.employee_end_date := i.employee_end_date;
+         l_emp_rec_type.style := i.style;
+         l_emp_rec_type.address := i.address;
+         l_emp_rec_type.assignment_number := i.assignment_number;
+         l_emp_rec_type.POSITION := i.POSITION;
+         l_emp_rec_type.supplier_status := i.supplier_status;
+         l_emp_rec_type.inactive_date := i.inactive_date;
+         l_emp_rec_type.u_nflag := i.u_nflag;
+         l_emp_rec_type.int_status := i.int_status;
+         l_emp_rec_type.api_status := i.api_status;
+         l_emp_rec_type.val_error := i.val_error;
+         l_emp_rec_type.api_error := i.api_error;
+         a:=p_validate(l_emp_rec_type,e_msg);
+       if a=1 then
+
+         IF i.u_nflag LIKE 'NEW'
+         THEN
+            DBMS_OUTPUT.put_line ('Record Status is new');
+
+            SELECT COUNT (*)
+              INTO dummy
+              FROM per_all_people_f
+             WHERE employee_number = i.employee_number;
+
+            IF dummy >= 1
+            THEN
+               handle_err (2, 'EMPLOYEE NUMBER' || i.employee_number);
+               e_msg := 'EMPLOY ALREADY EXISTS';
+               s_f := 0;
+            ELSE
+               DBMS_OUTPUT.put_line ('Into employ creation');
+               create_employ (l_emp_rec_type,
+                              ret_status,
+                              api_errorr,
+                              pperson_id
+                             );
+
+               IF ret_status <> 'S'
+               THEN
+                  handle_err (3, 'EMPLOYEE- NUMBER' || i.employee_number);
+                  e_msga := 'EMPLOY CREATION FALIED';
+                  s_f := 0;
+               END IF;
+            END IF;
+
+            IF s_f = 1
+            THEN
+               DBMS_OUTPUT.put_line ('Into vendor creation');
+               create_vendor (l_emp_rec_type,
+                              ret_status,
+                              api_errorr,
+                              pperson_id,
+                              pvendor_id
+                             );
+
+               IF ret_status <> 'S'
+               THEN
+                  handle_err (3, 'VENDOR- NUMBER' || i.employee_number);
+                  e_msga := 'VENDOR CREATION FALIED';
+                  s_f := 0;
+               END IF;
+            END IF;
+
+            IF s_f = 1
+            THEN
+               DBMS_OUTPUT.put_line ('Into vendor site creation');
+               create_supplier_site (l_emp_rec_type,
+                                     ret_status,
+                                     api_errorr,
+                                     pvendor_id,
+                                     pvendor_site_id
+                                    );
+
+               IF ret_status <> 'S'
+               THEN
+                  handle_err (3, 'VENDOR- NUMBER' || i.employee_number);
+                  e_msga := 'VENDOR SITE CREATION FALIED';
+                  s_f := 0;
+               END IF;
+            END IF;
+
+            ----IF s_f = 1
+            ---THEN
+               --DBMS_OUTPUT.put_line ('Into bank creation');
+
+               --SELECT COUNT (iba.bank_account_num)
+                 --INTO dummy
+                 --FROM iby_ext_bank_accounts iba, iby_ext_banks_v ib
+                --WHERE ib.bank_name = i.bank_name
+                 -- AND iba.bank_account_num = i.bank_account;
+
+               --IF dummy < 1 and ret_status='S'
+              -- THEN
+                 /* create_bank (l_emp_rec_type,
+                               ret_status,
+                               api_errorr,
+                               pvendor_id,
+                               pvendor_site_id
+                              );*/
+                 --             NULL;
+                -- -             
+                              
+
+              --    UPDATE xx_emp_tab
+               --      SET int_status='S'
+               --    WHERE CURRENT OF c1;
+               --ELSE
+                 -- DBMS_OUTPUT.put_line
+                   --                  ('bank exists and account number exists');
+               --END IF;
+           -- END IF;
+         ELSif i.u_nflag LIKE 'UPD%' then
+            SELECT COUNT (*)
+              INTO dummy
+              FROM per_all_people_f
+             WHERE employee_number = i.employee_number;
+
+            IF dummy < 1
+            THEN
+               handle_err (4, 'EMPLOYEE ' || i.employee_number);
+               e_msg := 'EMPLOY DOES NOT EXISTS FOR UPDATE';
+               s_f := 0;
+            ELSE
+               update_employ (l_emp_rec_type, ret_status, api_errorr);
+
+               IF ret_status <> 'S'
+               THEN
+                  handle_err (5, 'EMPLOYEE- NUMBER' || i.employee_number);
+                  e_msga := 'EMPLOY UPDATION FALIED';
+                  s_f := 0;
+               END IF;
+            END IF;
+
+            IF s_f = 1
+            THEN
+               update_vendor (l_emp_rec_type, ret_status, api_errorr);
+
+               IF ret_status <> 'S'
+               THEN
+                  handle_err (5,
+                              'VENDOR FOR EMP NUMBER' || i.employee_number);
+                  e_msga := 'VENDOR UPDATION FALIED';
+                  s_f := 0;
+               END IF;
+            END IF;
+
+            IF s_f = 1
+            THEN
+               update_vendor_site (l_emp_rec_type, ret_status, api_errorr);
+
+               IF ret_status <> 'S'
+               THEN
+                  handle_err (5,
+                                 'VENDOR SITE FOR EMP NUMBER '
+                              || i.employee_number
+                             );
+                  e_msga := 'VENDOR SITE UPDATION FALIED';
+                  s_f := 0;
+               END IF;
+            END IF;
+         END IF;
+
+         IF s_f = 0
+         THEN
+            UPDATE xx_emp_tab
+               SET int_status = 'E',
+                   val_error = e_msga,
+                   api_error = api_errorr
+             WHERE CURRENT OF c1;
+            else 
+            UPDATE xx_emp_tab
+               SET int_status = 'S',
+                   val_error = NULL,
+                   api_error = NULL
+             WHERE CURRENT OF c1;
+            -- ROLLBACK TO uninsert;
+            --DBMS_OUTPUT.put_line ('rollbacked ');
+         END IF;
+         else
+         update xx_emp_tab set val_error=e_msg where current of c1;
+         dbms_output.put_line('validation error');
+         dbms_output.put_line(e_msg);
+         end if;
+      END LOOP;
+      
+      --EXCEPTION WHEN OTHERS THEN
+      --DBMS_OUTPUT.PUT_LINE('EXCEPTION FOUND');
+      
+   END main_p;
+   
+   
+   
+   
+            
+END xx_employe_creation;
+/
