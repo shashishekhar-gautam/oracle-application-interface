@@ -1,0 +1,3498 @@
+********************************************** PACKAGE_SPECIFICATION *****************************************************
+
+CREATE OR REPLACE PACKAGE "xx_THIRD_PRTY_ORDR"  AS
+
+--============================================================================================
+--                                 xx CORP.
+--=============================================================================================
+-- $ID$
+-- $SOURCE$
+-- PROGRAM NAME :
+--
+-- TYPE         : package SPECIFICATION SCRIPT
+--
+-- PROGRAM      : THIS PACKAGE CONSISTS TWO  PUBLIC  PROCEDURES.ONE FOR LOADEING DATA,ANOTHER FOR MAPPING AND INSERTING
+-- 				  ORDER INTO INTERFACE TABLE
+--
+--
+-- CALLED BY OBJECTS :
+--   NAME                               	 		 				 TYPE              DESC OF FUNCTIONALITY
+--   <<xx THIRD PARTY READ,xx THIRD PARTY MAPPING >       <<CALLER TYPE>>  <<DESCRIPTION ABOUT CALLER>>
+--
+--
+--
+-- CALLED OBJECTS :
+--   NAME                                TYPE          DESC OF FUNCTIONALITY
+--   <<EXECUTABLE NAME>>       CONC PROG EXEC           SQL FILE | STORE PROCEDURE ETC
+--
+-- HISTORY      : DDMONYYYY   NAME            	  				   		 		   	  	   		 		  COMMENT
+--                23JUNE2022  SHASHI SHEKHAR GAUTAM (READING AND MAPPING ORDER FILES FROM DIFFERENT SOURCES)           				 		 FINAL CODING
+--		 
+-- VERSION CONTROL HISTORY:
+-- $LOG$
+--=================================================================================================
+--FOR THIRD PARTY ORDER LOADER -START
+FUNCTION F_CONVERT2(P_LIST IN VARCHAR2)
+RETURN xx_CONVERT_DEL PIPELINED;
+TYPE FILE_DATA_REC_TYPE IS RECORD(FILE_VAL VARCHAR2(360));
+TYPE FILE_DATA_TBL_TYPE IS TABLE OF FILE_DATA_REC_TYPE INDEX BY BINARY_INTEGER ;
+TYPE FILE_POS_REC_TYPE IS RECORD(FILE_POS NUMBER);
+TYPE FILE_POS_TBL_TYPE IS TABLE OF FILE_POS_REC_TYPE INDEX BY BINARY_INTEGER ;
+--PROCEDURE COMMA_TO_TABLE(P_STRING LONG,PARTY_NAME1 VARCHAR2,C IN OUT NUMBER,LINE_TYPE1 VARCHAR2,FILENAME VARCHAR2);
+--PROCEDURE xx_READ_DELIMITED(PN VARCHAR2,V_STRING IN OUT LONG,C IN OUT NUMBER, DE VARCHAR2,ENC VARCHAR2,LT  IN OUT VARCHAR2,FILENAME VARCHAR2);
+PROCEDURE xx_READ_TAB(PN VARCHAR2,FILENAME VARCHAR2,PATH VARCHAR2,EREC_EM xx_THIRD_PARTY_MAPPING%ROWTYPE);
+PROCEDURE xx_READ_FILE(ERRBUF VARCHAR2,RETCODE VARCHAR2,PATH in VARCHAR2,FILENAME in VARCHAR2,PARTY_NAME VARCHAR2);
+
+PROCEDURE xx_THIRD_PARTY_MAPPING_PROC(ERRBUF VARCHAR2,RETCODE VARCHAR2);
+--FILENAME VARCHAR2(250);
+--FOR THIRD PARTY ORDER LOADER -END
+-- FOR THIRD PARTY ORDER VALIDATION  --START
+
+PROCEDURE xx_ORDER_CREATION_VALIDATIONS(ERRBUF  VARCHAR2,RETCODE  VARCHAR2);
+PROCEDURE xx_DATA_FEED_OUTBOUND(ERRBUF VARCHAR2,RETCODE VARCHAR2,P_N IN VARCHAR2,PATH IN VARCHAR2,Fi_NAME IN VARCHAR2,X_FEED IN VARCHAR2);
+--PROCEDURE xx_ORDER_VALIDATIONS(ERRBUF VARCHAR2,RETCODE VARCHAR2);
+p_address1          		VARCHAR2(240);
+p_address2          		VARCHAR2(240);
+p_address3          		VARCHAR2(240);
+p_address4          		VARCHAR2(240);
+p_city              			VARCHAR2(240);
+p_county           			VARCHAR2(240);
+p_country          			VARCHAR2(240);
+p_orig_system_reference	VARCHAR2(100);
+p_parent_customer_ref		VARCHAR2(100);
+ p_ship_customer_ref      	VARCHAR2(100);
+ p_ship_customer_ref1      	VARCHAR2(100);
+ p_ship_customer_ref2      	VARCHAR2(100);
+p_total_count			NUMBER 	:=0;
+p_success_count			NUMBER 	:=0;
+p_error_count			NUMBER 	:=0;
+p_sold_to_org_id			NUMBER 	:=0;
+p_ship_to_org_id			NUMBER 	:=0;
+p_invoice_to_org_id		NUMBER 	:=0;
+p_invoice_ship_to_org_id	NUMBER 	:=0;
+p_customer_number		NUMBER 	:=0;
+p_customer_number1		NUMBER 	:=0;
+p_inventory_item_id		NUMBER	:=0;
+p_source_id			NUMBER 	:=0;
+p_price_list_id			NUMBER 	:=0;
+p_cust_account_id		NUMBER 	:=0;
+p_orig_sys_document_ref	VARCHAR2 (100);
+p_orig_sys_line_ref		VARCHAR2 (100);
+p_org_name			VARCHAR2 (100);
+p_order_type			VARCHAR2 (100);
+p_item_number			VARCHAR2 (240);
+p_first_name			VARCHAR2 (240);
+p_last_name			VARCHAR2 (240);
+p_line_type				VARCHAR2 (1);
+p_ship_first_name		VARCHAR2 (240);
+p_ship_last_name			VARCHAR2 (240);
+p_party_id				NUMBER;
+p_error_message			VARCHAR2 (4000);
+p_order_identifier1		VARCHAR2 (240):='TEST1';
+p_order_identifier2		VARCHAR2 (240) :='TEST2';
+p_line_number			NUMBER 	:=1;
+p_shipping_method_code	VARCHAR2 (100);
+p_cust_acct_site_id		NUMBER;
+p_item_price			NUMBER;
+p_total_amount			NUMBER;
+v_application_id           	 NUMBER    := fnd_profile.VALUE ('RESP_APPL_ID');
+v_count				NUMBER 	:=0;
+v_customer_count		NUMBER 	:=0;
+v_error_count			NUMBER 	:=0;
+p_org_id				NUMBER   	:= FND_PROFILE.VALUE ('ORG_ID');
+p_responsibility_id        	NUMBER    	:= fnd_profile.VALUE ('RESP_ID');
+p_user_id             		 NUMBER   	:= fnd_profile.VALUE ('USER_ID');
+p_login_id				NUMBER 	:= fnd_profile.VALUE ('LOGIN_ID');
+x_return_status			VARCHAR2(240);
+-- FOR THIRD PARTY VALIDATION --END
+
+END xx_THIRD_PRTY_ORDR;
+/
+
+
+*************************************************************************************************************************
+                                                    PACKAGE_BODY                           
+*************************************************************************************************************************
+
+
+
+
+CREATE OR REPLACE PACKAGE BODY "xx_THIRD_PRTY_ORDR" AS
+
+--============================================================================================
+--                                 xx CORP.
+--=============================================================================================
+-- $ID$
+-- $SOURCE$
+-- PROGRAM NAME :
+--
+-- TYPE         : package body SCRIPT
+--
+-- PROGRAM      : THIS PACKAGE CONSISTS TWO  PUBLIC  PROCEDURES.ONE FOR LOADEING DATA,ANOTHER FOR MAPPING AND INSERTING
+-- 				  ORDER INTO INTERFACE TABLE
+--
+--
+-- CALLED BY OBJECTS :
+--   NAME                               	 		 				 TYPE              DESC OF FUNCTIONALITY
+--   <<xx THIRD PARTY READ,xx THIRD PARTY MAPPING >       <<CALLER TYPE>>  <<DESCRIPTION ABOUT CALLER>>
+--
+--
+--
+-- CALLED OBJECTS :
+--   NAME                                TYPE          DESC OF FUNCTIONALITY
+--   <<EXECUTABLE NAME>>       CONC PROG EXEC           SQL FILE | STORE PROCEDURE ETC
+--
+-- HISTORY      : DDMONYYYY   NAME            	  		COMMENT
+--                23JUNE2023  SHASHI SHEKHAR GAUTAM (READING  AND MAPPING ORDER FILES FROM DIFFERENT SOURCES INTO STAGING)          FINAL CODING
+--
+-- VERSION CONTROL HISTORY:
+-- $LOG$
+--=================================================================================================
+
+--START OF LOADER PART
+FUNCTION F_CONVERT2(P_LIST IN VARCHAR2)
+      RETURN xx_CONVERT_DEL PIPELINED
+    AS
+      L_STRING       LONG := P_LIST || '|';
+      L_COMMA_INDEX  PLS_INTEGER;
+      L_INDEX        PLS_INTEGER := 1;
+    BEGIN
+      LOOP
+       L_COMMA_INDEX := INSTR(L_STRING, '|', L_INDEX);
+
+       EXIT WHEN L_COMMA_INDEX = 0;
+       PIPE ROW ( SUBSTR(L_STRING, L_INDEX, L_COMMA_INDEX - L_INDEX) );
+       L_INDEX := L_COMMA_INDEX + 1;
+     END LOOP;
+     RETURN;
+END F_CONVERT2;
+
+------------------------------------------------------------------------------------------------------------------
+--start of procedure  comma to table
+--------------------------------------------------------------------------------------------------------------------
+
+PROCEDURE COMMA_TO_TABLE(P_STRING LONG,PARTY_NAME1 VARCHAR2,C IN OUT NUMBER,LINE_TYPE1 VARCHAR2,FILENAME VARCHAR2) IS
+
+CURSOR C1(P_STRING IN LONG) IS SELECT * FROM TABLE(F_CONVERT2(P_STRING));
+
+TYPE L_REC_TYPE IS RECORD(L1 VARCHAR2(240));
+TYPE L_REC_TBL_TYPE IS TABLE OF L_REC_TYPE INDEX BY BINARY_INTEGER ;
+X_L_REC_TBL_TYPE L_REC_TBL_TYPE;
+TYPE L_COL_TYPE IS RECORD(C1 VARCHAR2(240));
+TYPE L_COL_TBL_TYPE IS TABLE OF L_COL_TYPE INDEX BY BINARY_INTEGER ;
+X_L_COL_TBL_TYPE L_COL_TBL_TYPE;
+RI ROWID:=NULL;
+I NUMBER := 0;
+J NUMBER := 0;
+Z NUMBER:=1;
+e number;
+BEGIN
+--DBMS_OUTPUT.PUT_LINE('STRING RECEIVED'||P_STRING);
+
+FOR C1REC IN C1(P_STRING) LOOP
+X_L_REC_TBL_TYPE(I).L1 := C1REC.COLUMN_VALUE;
+I  := I+1;
+END LOOP;
+Z:=Z+C;
+
+INSERT INTO xx_THIRD_PARTY_PRE_STAGING(PARTY_NAME,ROW_SEQUENCE,ATTRIBUTE1,FILE_NAME) VALUES (PARTY_NAME1,xx_THRD_PRTY_SEQ.NEXTVAL,LINE_TYPE1,FILENAME);
+dbms_output.put_line('test----------------------- :'||PARTY_NAME1);
+--SELECT MAX(ROW_SEQUENCE) INTO z FROM xx_THIRD_PARTY_PRE_STAGING WHERE PARTY_NAME = PARTY_NAME1 ;
+select xx_THRD_PRTY_SEQ.currval into e from dual;
+SELECT MAX(Rowid) INTO RI FROM xx_THIRD_PARTY_PRE_STAGING WHERE PARTY_NAME = PARTY_NAME1 AND ROW_SEQUENCE=E;
+
+DBMS_OUTPUT.PUT_LINE(RI);
+FOR K IN 0..I-1 LOOP
+X_L_COL_TBL_TYPE(K).C1:='COLUMN'||TO_CHAR(K+1);
+DBMS_OUTPUT.PUT_LINE(X_L_COL_TBL_TYPE(K).C1||'    '||X_L_REC_TBL_TYPE(K).L1);
+EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_PRE_STAGING SET  '||X_L_COL_TBL_TYPE(K).C1 ||'='||''''||X_L_REC_TBL_TYPE(K).L1||''''||'WHERE ROWID = '||''''||RI||''''||'AND PARTY_NAME LIKE  '||''''||PARTY_NAME1||'''';
+END LOOP;
+C := C + 1;
+END COMMA_TO_TABLE;
+
+
+
+
+------------------------------------------------------------------------------------------------------------------
+--start of procedure  xx_READ_DELIMITED
+--------------------------------------------------------------------------------------------------------------------
+
+
+PROCEDURE xx_READ_DELIMITED(PN VARCHAR2,V_STRING IN OUT LONG,C IN OUT NUMBER, DE IN VARCHAR2,ENC IN VARCHAR2,LT  IN OUT VARCHAR2,FILENAME VARCHAR2)  AS
+
+SYMB VARCHAR2(250);
+ DEL VARCHAR2(250);
+  ENCL VARCHAR2(250);
+
+BEGIN
+ ENCL:=ENC;
+ DEL:=DE;
+IF DEL IS NOT NULL THEN
+   IF ENCL IS NULL THEN
+    V_STRING := REPLACE(V_STRING,DEL,'|');
+    DBMS_OUTPUT.PUT_LINE(V_STRING);
+
+    COMMA_TO_TABLE(V_STRING,PN,C,LT,FILENAME);
+
+    ELSE
+      DBMS_OUTPUT.PUT_LINE('INTO DELIMITED WITH ENCLOSURE');
+    DBMS_OUTPUT.PUT_LINE('V_STRING:'||V_STRING);
+    SYMB:=ENCL||DEL||ENCL;
+    V_STRING := REPLACE(V_STRING,SYMB,'|');
+    V_STRING := REPLACE(V_STRING,ENCL,'');
+    DBMS_OUTPUT.PUT_LINE('SENDING DATA'||V_STRING);
+
+    COMMA_TO_TABLE(V_STRING,PN,C,LT,FILENAME);
+    DBMS_OUTPUT.PUT_LINE('EXITING FROM SECOND CONDITION...');
+
+    END IF;
+   ELSE
+   DBMS_OUTPUT.PUT_LINE('PLEASE CHECK YOUR DELIMITER IN MAPPING TABLE AGAINST FILE FOR PARTY='||PN);
+   END IF;
+END xx_READ_DELIMITED;
+
+
+------------------------------------------------------------------------------------------------------------------
+--start of procedure  xx_READ_TAB
+--------------------------------------------------------------------------------------------------------------------
+
+
+PROCEDURE xx_READ_TAB(PN VARCHAR2,FILENAME VARCHAR2,PATH VARCHAR2,EREC_EM xx_THIRD_PARTY_MAPPING%ROWTYPE)
+ IS
+V_REQUEST_ID NUMBER;
+FILEPATH VARCHAR2(250);
+S_SEQ NUMBER;
+E_SEQ NUMBER;
+DUMMY_SEQ NUMBER;
+V_DEV_PHASE VARCHAR2(250);
+V_WAIT BOOLEAN;
+V_PHASE VARCHAR2(250);
+V_STATUS VARCHAR2(250);
+V_DEV_STATUS VARCHAR2(250);
+V_MESSAGE VARCHAR2(250);
+CSTATUS_CODE VARCHAR2(250);
+COUT NUMBER:=0;
+HL_SYMB VARCHAR2(250);
+BEGIN
+DBMS_OUTPUT.PUT_LINE('FOUND PARTY NAME WITH TAB DELIMITED '||PN);
+FILEPATH:=PATH||'/'||FILENAME;
+DBMS_OUTPUT.PUT_LINE('IN PATH :'||FILEPATH);
+FND_GLOBAL.APPS_INITIALIZE(
+USER_ID=>FND_GLOBAL.USER_ID,
+RESP_ID=>FND_GLOBAL.RESP_ID,
+RESP_APPL_ID=>FND_GLOBAL.RESP_APPL_ID,
+SECURITY_GROUP_ID=>FND_GLOBAL.SECURITY_GROUP_ID
+);
+SELECT xx_THRD_PRTY_SEQ.NEXTVAL INTO S_SEQ FROM DUAL;
+
+DBMS_OUTPUT.PUT_LINE('STARTING SEQUENCE IS :'||S_SEQ);
+V_DEV_PHASE:='R';
+V_REQUEST_ID := FND_REQUEST.SUBMIT_REQUEST('ONT','xx_READ_TAB',NULL,NULL,FALSE,FILEPATH);
+--xx_THIRD_PARTY_MAPPING_proc;
+
+COMMIT;
+
+	WHILE V_DEV_PHASE != 'COMPLETE'
+	LOOP
+	    V_WAIT:= FND_CONCURRENT.WAIT_FOR_REQUEST(V_REQUEST_ID
+										,15
+										,10
+										,V_PHASE
+										,V_STATUS
+										,V_DEV_PHASE
+										,V_DEV_STATUS
+										,V_MESSAGE);
+
+DBMS_OUTPUT.PUT_LINE('DEV PHASE IS :'||V_DEV_PHASE);
+DBMS_OUTPUT.PUT_LINE('INTO LOOP');
+EXIT WHEN V_DEV_PHASE = 'COMPLETE';
+END LOOP;
+
+SELECT DECODE
+(STATUS_CODE,
+'A','WAITING',
+'B','RESUMING',
+'C','NORMAL',
+'D','CANCELLED',
+'E','ERROR',
+'F','SCHEDULED',
+'G','WARNING',
+'H','ON HOLD',
+'I','NORMAL',
+'M','NO MANAGER',
+'Q','STANDBY',
+'R','NORMAL',
+'S','SUSPENDED',
+'T','TERMINATING',
+'U','DISABLED',
+'W','PAUSED',
+'X','TERMINATED',
+'Z','WAITING',
+STATUS_CODE) INTO CSTATUS_CODE FROM FND_CONCURRENT_REQUESTS WHERE REQUEST_ID=V_REQUEST_ID;
+
+DBMS_OUTPUT.PUT_LINE ('REQUEST COMPLETED WITH STATUS:'||CSTATUS_CODE);
+COMMIT;
+
+SELECT MAX(ROW_SEQUENCE) INTO E_SEQ  FROM xx_THIRD_PARTY_PRE_STAGING;
+
+DBMS_OUTPUT.PUT_LINE('ENDING SEQUENCE IS :'||E_SEQ);
+IF EREC_EM.LINE_TYPE !='S' THEN
+   					 HL_SYMB:='HL';
+					 ELSE
+					 HL_SYMB:='S';
+	END IF;
+
+UPDATE xx_THIRD_PARTY_PRE_STAGING SET PARTY_NAME = PN, ATTRIBUTE1=HL_SYMB,FILE_NAME=FILENAME WHERE ROW_SEQUENCE BETWEEN S_SEQ AND E_SEQ;
+DBMS_OUTPUT.PUT_LINE('V_REQUEST_ID:'||V_REQUEST_ID);
+
+COUT:= E_SEQ-S_SEQ ;
+
+IF COUT<0 THEN
+COUT:=0;
+END IF;
+FND_FILE.PUT_LINE(FND_FILE.LOG,'PARTY NAME : ' || PN);
+FND_FILE.PUT_LINE(FND_FILE.LOG,'NO. OF ROWS INSERTED : ' || COUT);
+
+commit;
+
+
+
+COMMIT;
+END xx_READ_TAB;
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------
+--start of procedure  xx_READ_CONCATENATED
+--------------------------------------------------------------------------------------------------------------------
+
+
+PROCEDURE xx_READ_CONCATENATED(PN IN VARCHAR2,S IN LONG,EREC_EM IN xx_THIRD_PARTY_MAPPING%ROWTYPE,C IN OUT NUMBER,FILENAME VARCHAR2)
+IS
+l_file_data_tbl_type file_data_tbl_type;
+l_file_pos_tbl_type file_pos_tbl_type;
+i number := 1;
+ri rowid;
+BEGIN
+DBMS_OUTPUT.PUT_lINE('DELIMITED FILE RECEIVED FOR PARTY NAME '||PN);
+DBMS_OUTPUT.PUT_LINE('STRING RECEIVED :'||S);
+
+IF EREC_EM.start_position IS NOT NULL THEN
+		IF EREC_EM.POSITION1 IS NOT NULL THEN
+	 l_file_data_tbl_type(1).file_val:=SUBSTR(S,TO_NUMBER(EREC_EM.start_position),TO_NUMBER(EREC_EM.POSITION1));
+	 l_file_pos_tbl_type(1).file_pos:=(TO_NUMBER(EREC_EM.start_position)+TO_NUMBER(EREC_EM.POSITION1));
+
+	 END IF;
+	END IF;
+
+IF EREC_EM.POSITION2 IS NOT NULL THEN
+l_file_data_tbl_type(2).file_val:=SUBSTR(S,l_file_pos_tbl_type(1).file_pos,TO_NUMBER(EREC_EM.POSITION2));
+l_file_pos_tbl_type(2).file_pos:= l_file_pos_tbl_type(1).file_pos+TO_NUMBER(EREC_EM.POSITION2);
+END IF;
+IF EREC_EM.POSITION3 IS NOT NULL THEN
+l_file_data_tbl_type(3).file_val:=SUBSTR(S,l_file_pos_tbl_type(2).file_pos,TO_NUMBER(EREC_EM.POSITION3));
+l_file_pos_tbl_type(3).file_pos:= l_file_pos_tbl_type(2).file_pos+TO_NUMBER(EREC_EM.POSITION3);
+END IF;
+
+IF EREC_EM.POSITION4 IS NOT NULL THEN l_file_data_tbl_type(4).file_val:=SUBSTR(S,l_file_pos_tbl_type(3).file_pos,TO_NUMBER(EREC_EM.POSITION4)); l_file_pos_tbl_type(4).file_pos:= l_file_pos_tbl_type(3).file_pos+TO_NUMBER(EREC_EM.POSITION4); END IF;
+IF EREC_EM.POSITION5 IS NOT NULL THEN l_file_data_tbl_type(5).file_val:=SUBSTR(S,l_file_pos_tbl_type(4).file_pos,TO_NUMBER(EREC_EM.POSITION5)); l_file_pos_tbl_type(5).file_pos:= l_file_pos_tbl_type(4).file_pos+TO_NUMBER(EREC_EM.POSITION5); END IF;
+IF EREC_EM.POSITION6 IS NOT NULL THEN l_file_data_tbl_type(6).file_val:=SUBSTR(S,l_file_pos_tbl_type(5).file_pos,TO_NUMBER(EREC_EM.POSITION6)); l_file_pos_tbl_type(6).file_pos:= l_file_pos_tbl_type(5).file_pos+TO_NUMBER(EREC_EM.POSITION6); END IF;
+IF EREC_EM.POSITION7 IS NOT NULL THEN l_file_data_tbl_type(7).file_val:=SUBSTR(S,l_file_pos_tbl_type(6).file_pos,TO_NUMBER(EREC_EM.POSITION7)); l_file_pos_tbl_type(7).file_pos:= l_file_pos_tbl_type(6).file_pos+TO_NUMBER(EREC_EM.POSITION7); END IF;
+IF EREC_EM.POSITION8 IS NOT NULL THEN l_file_data_tbl_type(8).file_val:=SUBSTR(S,l_file_pos_tbl_type(7).file_pos,TO_NUMBER(EREC_EM.POSITION8)); l_file_pos_tbl_type(8).file_pos:= l_file_pos_tbl_type(7).file_pos+TO_NUMBER(EREC_EM.POSITION8); END IF;
+IF EREC_EM.POSITION9 IS NOT NULL THEN l_file_data_tbl_type(9).file_val:=SUBSTR(S,l_file_pos_tbl_type(8).file_pos,TO_NUMBER(EREC_EM.POSITION9)); l_file_pos_tbl_type(9).file_pos:= l_file_pos_tbl_type(8).file_pos+TO_NUMBER(EREC_EM.POSITION9); END IF;
+IF EREC_EM.POSITION10 IS NOT NULL THEN l_file_data_tbl_type(10).file_val:=SUBSTR(S,l_file_pos_tbl_type(9).file_pos,TO_NUMBER(EREC_EM.POSITION10)); l_file_pos_tbl_type(10).file_pos:= l_file_pos_tbl_type(9).file_pos+TO_NUMBER(EREC_EM.POSITION10); END IF;
+IF EREC_EM.POSITION11 IS NOT NULL THEN l_file_data_tbl_type(11).file_val:=SUBSTR(S,l_file_pos_tbl_type(10).file_pos,TO_NUMBER(EREC_EM.POSITION11)); l_file_pos_tbl_type(11).file_pos:= l_file_pos_tbl_type(10).file_pos+TO_NUMBER(EREC_EM.POSITION11); END IF;
+IF EREC_EM.POSITION12 IS NOT NULL THEN l_file_data_tbl_type(12).file_val:=SUBSTR(S,l_file_pos_tbl_type(11).file_pos,TO_NUMBER(EREC_EM.POSITION12)); l_file_pos_tbl_type(12).file_pos:= l_file_pos_tbl_type(11).file_pos+TO_NUMBER(EREC_EM.POSITION12); END IF;
+IF EREC_EM.POSITION13 IS NOT NULL THEN l_file_data_tbl_type(13).file_val:=SUBSTR(S,l_file_pos_tbl_type(12).file_pos,TO_NUMBER(EREC_EM.POSITION13)); l_file_pos_tbl_type(13).file_pos:= l_file_pos_tbl_type(12).file_pos+TO_NUMBER(EREC_EM.POSITION13); END IF;
+IF EREC_EM.POSITION14 IS NOT NULL THEN l_file_data_tbl_type(14).file_val:=SUBSTR(S,l_file_pos_tbl_type(13).file_pos,TO_NUMBER(EREC_EM.POSITION14)); l_file_pos_tbl_type(14).file_pos:= l_file_pos_tbl_type(13).file_pos+TO_NUMBER(EREC_EM.POSITION14); END IF;
+IF EREC_EM.POSITION15 IS NOT NULL THEN l_file_data_tbl_type(15).file_val:=SUBSTR(S,l_file_pos_tbl_type(14).file_pos,TO_NUMBER(EREC_EM.POSITION15)); l_file_pos_tbl_type(15).file_pos:= l_file_pos_tbl_type(14).file_pos+TO_NUMBER(EREC_EM.POSITION15); END IF;
+IF EREC_EM.POSITION16 IS NOT NULL THEN l_file_data_tbl_type(16).file_val:=SUBSTR(S,l_file_pos_tbl_type(15).file_pos,TO_NUMBER(EREC_EM.POSITION16)); l_file_pos_tbl_type(16).file_pos:= l_file_pos_tbl_type(15).file_pos+TO_NUMBER(EREC_EM.POSITION16); END IF;
+IF EREC_EM.POSITION17 IS NOT NULL THEN l_file_data_tbl_type(17).file_val:=SUBSTR(S,l_file_pos_tbl_type(16).file_pos,TO_NUMBER(EREC_EM.POSITION17)); l_file_pos_tbl_type(17).file_pos:= l_file_pos_tbl_type(16).file_pos+TO_NUMBER(EREC_EM.POSITION17); END IF;
+IF EREC_EM.POSITION18 IS NOT NULL THEN l_file_data_tbl_type(18).file_val:=SUBSTR(S,l_file_pos_tbl_type(17).file_pos,TO_NUMBER(EREC_EM.POSITION18)); l_file_pos_tbl_type(18).file_pos:= l_file_pos_tbl_type(17).file_pos+TO_NUMBER(EREC_EM.POSITION18); END IF;
+IF EREC_EM.POSITION19 IS NOT NULL THEN l_file_data_tbl_type(19).file_val:=SUBSTR(S,l_file_pos_tbl_type(18).file_pos,TO_NUMBER(EREC_EM.POSITION19)); l_file_pos_tbl_type(19).file_pos:= l_file_pos_tbl_type(18).file_pos+TO_NUMBER(EREC_EM.POSITION19); END IF;
+IF EREC_EM.POSITION20 IS NOT NULL THEN l_file_data_tbl_type(20).file_val:=SUBSTR(S,l_file_pos_tbl_type(19).file_pos,TO_NUMBER(EREC_EM.POSITION20)); l_file_pos_tbl_type(20).file_pos:= l_file_pos_tbl_type(19).file_pos+TO_NUMBER(EREC_EM.POSITION20); END IF;
+IF EREC_EM.POSITION21 IS NOT NULL THEN l_file_data_tbl_type(21).file_val:=SUBSTR(S,l_file_pos_tbl_type(20).file_pos,TO_NUMBER(EREC_EM.POSITION21)); l_file_pos_tbl_type(21).file_pos:= l_file_pos_tbl_type(20).file_pos+TO_NUMBER(EREC_EM.POSITION21); END IF;
+IF EREC_EM.POSITION22 IS NOT NULL THEN l_file_data_tbl_type(22).file_val:=SUBSTR(S,l_file_pos_tbl_type(21).file_pos,TO_NUMBER(EREC_EM.POSITION22)); l_file_pos_tbl_type(22).file_pos:= l_file_pos_tbl_type(21).file_pos+TO_NUMBER(EREC_EM.POSITION22); END IF;
+IF EREC_EM.POSITION23 IS NOT NULL THEN l_file_data_tbl_type(23).file_val:=SUBSTR(S,l_file_pos_tbl_type(22).file_pos,TO_NUMBER(EREC_EM.POSITION23)); l_file_pos_tbl_type(23).file_pos:= l_file_pos_tbl_type(22).file_pos+TO_NUMBER(EREC_EM.POSITION23); END IF;
+IF EREC_EM.POSITION24 IS NOT NULL THEN l_file_data_tbl_type(24).file_val:=SUBSTR(S,l_file_pos_tbl_type(23).file_pos,TO_NUMBER(EREC_EM.POSITION24)); l_file_pos_tbl_type(24).file_pos:= l_file_pos_tbl_type(23).file_pos+TO_NUMBER(EREC_EM.POSITION24); END IF;
+IF EREC_EM.POSITION25 IS NOT NULL THEN l_file_data_tbl_type(25).file_val:=SUBSTR(S,l_file_pos_tbl_type(24).file_pos,TO_NUMBER(EREC_EM.POSITION25)); l_file_pos_tbl_type(25).file_pos:= l_file_pos_tbl_type(24).file_pos+TO_NUMBER(EREC_EM.POSITION25); END IF;
+IF EREC_EM.POSITION26 IS NOT NULL THEN l_file_data_tbl_type(26).file_val:=SUBSTR(S,l_file_pos_tbl_type(25).file_pos,TO_NUMBER(EREC_EM.POSITION26)); l_file_pos_tbl_type(26).file_pos:= l_file_pos_tbl_type(25).file_pos+TO_NUMBER(EREC_EM.POSITION26); END IF;
+IF EREC_EM.POSITION27 IS NOT NULL THEN l_file_data_tbl_type(27).file_val:=SUBSTR(S,l_file_pos_tbl_type(26).file_pos,TO_NUMBER(EREC_EM.POSITION27)); l_file_pos_tbl_type(27).file_pos:= l_file_pos_tbl_type(26).file_pos+TO_NUMBER(EREC_EM.POSITION27); END IF;
+IF EREC_EM.POSITION28 IS NOT NULL THEN l_file_data_tbl_type(28).file_val:=SUBSTR(S,l_file_pos_tbl_type(27).file_pos,TO_NUMBER(EREC_EM.POSITION28)); l_file_pos_tbl_type(28).file_pos:= l_file_pos_tbl_type(27).file_pos+TO_NUMBER(EREC_EM.POSITION28); END IF;
+IF EREC_EM.POSITION29 IS NOT NULL THEN l_file_data_tbl_type(29).file_val:=SUBSTR(S,l_file_pos_tbl_type(28).file_pos,TO_NUMBER(EREC_EM.POSITION29)); l_file_pos_tbl_type(29).file_pos:= l_file_pos_tbl_type(28).file_pos+TO_NUMBER(EREC_EM.POSITION29); END IF;
+IF EREC_EM.POSITION30 IS NOT NULL THEN l_file_data_tbl_type(30).file_val:=SUBSTR(S,l_file_pos_tbl_type(29).file_pos,TO_NUMBER(EREC_EM.POSITION30)); l_file_pos_tbl_type(30).file_pos:= l_file_pos_tbl_type(29).file_pos+TO_NUMBER(EREC_EM.POSITION30); END IF;
+
+IF EREC_EM.POSITION31  IS NOT NULL THEN l_file_data_tbl_type(31).file_val:=SUBSTR(S,l_file_pos_tbl_type(30).file_pos,TO_NUMBER(EREC_EM.POSITION31)); l_file_pos_tbl_type(31).file_pos:= l_file_pos_tbl_type(30).file_pos+TO_NUMBER(EREC_EM.POSITION31); END IF;
+IF EREC_EM.POSITION32  IS NOT NULL THEN l_file_data_tbl_type(32).file_val:=SUBSTR(S,l_file_pos_tbl_type(31).file_pos,TO_NUMBER(EREC_EM.POSITION32)); l_file_pos_tbl_type(32).file_pos:= l_file_pos_tbl_type(31).file_pos+TO_NUMBER(EREC_EM.POSITION32); END IF;
+IF EREC_EM.POSITION33  IS NOT NULL THEN l_file_data_tbl_type(33).file_val:=SUBSTR(S,l_file_pos_tbl_type(32).file_pos,TO_NUMBER(EREC_EM.POSITION33)); l_file_pos_tbl_type(33).file_pos:= l_file_pos_tbl_type(32).file_pos+TO_NUMBER(EREC_EM.POSITION33); END IF;
+IF EREC_EM.POSITION34  IS NOT NULL THEN l_file_data_tbl_type(34).file_val:=SUBSTR(S,l_file_pos_tbl_type(33).file_pos,TO_NUMBER(EREC_EM.POSITION34)); l_file_pos_tbl_type(34).file_pos:= l_file_pos_tbl_type(33).file_pos+TO_NUMBER(EREC_EM.POSITION34); END IF;
+IF EREC_EM.POSITION35  IS NOT NULL THEN l_file_data_tbl_type(35).file_val:=SUBSTR(S,l_file_pos_tbl_type(34).file_pos,TO_NUMBER(EREC_EM.POSITION35)); l_file_pos_tbl_type(35).file_pos:= l_file_pos_tbl_type(34).file_pos+TO_NUMBER(EREC_EM.POSITION35); END IF;
+IF EREC_EM.POSITION36  IS NOT NULL THEN l_file_data_tbl_type(36).file_val:=SUBSTR(S,l_file_pos_tbl_type(35).file_pos,TO_NUMBER(EREC_EM.POSITION36)); l_file_pos_tbl_type(36).file_pos:= l_file_pos_tbl_type(35).file_pos+TO_NUMBER(EREC_EM.POSITION36); END IF;
+IF EREC_EM.POSITION37  IS NOT NULL THEN l_file_data_tbl_type(37).file_val:=SUBSTR(S,l_file_pos_tbl_type(36).file_pos,TO_NUMBER(EREC_EM.POSITION37)); l_file_pos_tbl_type(37).file_pos:= l_file_pos_tbl_type(36).file_pos+TO_NUMBER(EREC_EM.POSITION37); END IF;
+IF EREC_EM.POSITION38  IS NOT NULL THEN l_file_data_tbl_type(38).file_val:=SUBSTR(S,l_file_pos_tbl_type(37).file_pos,TO_NUMBER(EREC_EM.POSITION38)); l_file_pos_tbl_type(38).file_pos:= l_file_pos_tbl_type(37).file_pos+TO_NUMBER(EREC_EM.POSITION38); END IF;
+IF EREC_EM.POSITION39  IS NOT NULL THEN l_file_data_tbl_type(39).file_val:=SUBSTR(S,l_file_pos_tbl_type(38).file_pos,TO_NUMBER(EREC_EM.POSITION39)); l_file_pos_tbl_type(39).file_pos:= l_file_pos_tbl_type(38).file_pos+TO_NUMBER(EREC_EM.POSITION39); END IF;
+IF EREC_EM.POSITION40  IS NOT NULL THEN l_file_data_tbl_type(40).file_val:=SUBSTR(S,l_file_pos_tbl_type(39).file_pos,TO_NUMBER(EREC_EM.POSITION40)); l_file_pos_tbl_type(40).file_pos:= l_file_pos_tbl_type(39).file_pos+TO_NUMBER(EREC_EM.POSITION40); END IF;
+IF EREC_EM.POSITION41  IS NOT NULL THEN l_file_data_tbl_type(41).file_val:=SUBSTR(S,l_file_pos_tbl_type(40).file_pos,TO_NUMBER(EREC_EM.POSITION41)); l_file_pos_tbl_type(41).file_pos:= l_file_pos_tbl_type(40).file_pos+TO_NUMBER(EREC_EM.POSITION41); END IF;
+IF EREC_EM.POSITION42  IS NOT NULL THEN l_file_data_tbl_type(42).file_val:=SUBSTR(S,l_file_pos_tbl_type(41).file_pos,TO_NUMBER(EREC_EM.POSITION42)); l_file_pos_tbl_type(42).file_pos:= l_file_pos_tbl_type(41).file_pos+TO_NUMBER(EREC_EM.POSITION42); END IF;
+IF EREC_EM.POSITION43  IS NOT NULL THEN l_file_data_tbl_type(43).file_val:=SUBSTR(S,l_file_pos_tbl_type(42).file_pos,TO_NUMBER(EREC_EM.POSITION43)); l_file_pos_tbl_type(43).file_pos:= l_file_pos_tbl_type(42).file_pos+TO_NUMBER(EREC_EM.POSITION43); END IF;
+IF EREC_EM.POSITION44  IS NOT NULL THEN l_file_data_tbl_type(44).file_val:=SUBSTR(S,l_file_pos_tbl_type(43).file_pos,TO_NUMBER(EREC_EM.POSITION44)); l_file_pos_tbl_type(44).file_pos:= l_file_pos_tbl_type(43).file_pos+TO_NUMBER(EREC_EM.POSITION44); END IF;
+IF EREC_EM.POSITION45  IS NOT NULL THEN l_file_data_tbl_type(45).file_val:=SUBSTR(S,l_file_pos_tbl_type(44).file_pos,TO_NUMBER(EREC_EM.POSITION45)); l_file_pos_tbl_type(45).file_pos:= l_file_pos_tbl_type(44).file_pos+TO_NUMBER(EREC_EM.POSITION45); END IF;
+IF EREC_EM.POSITION46  IS NOT NULL THEN l_file_data_tbl_type(46).file_val:=SUBSTR(S,l_file_pos_tbl_type(45).file_pos,TO_NUMBER(EREC_EM.POSITION46)); l_file_pos_tbl_type(46).file_pos:= l_file_pos_tbl_type(45).file_pos+TO_NUMBER(EREC_EM.POSITION46); END IF;
+IF EREC_EM.POSITION47  IS NOT NULL THEN l_file_data_tbl_type(47).file_val:=SUBSTR(S,l_file_pos_tbl_type(46).file_pos,TO_NUMBER(EREC_EM.POSITION47)); l_file_pos_tbl_type(47).file_pos:= l_file_pos_tbl_type(46).file_pos+TO_NUMBER(EREC_EM.POSITION47); END IF;
+IF EREC_EM.POSITION48  IS NOT NULL THEN l_file_data_tbl_type(48).file_val:=SUBSTR(S,l_file_pos_tbl_type(47).file_pos,TO_NUMBER(EREC_EM.POSITION48)); l_file_pos_tbl_type(48).file_pos:= l_file_pos_tbl_type(47).file_pos+TO_NUMBER(EREC_EM.POSITION48); END IF;
+IF EREC_EM.POSITION49  IS NOT NULL THEN l_file_data_tbl_type(49).file_val:=SUBSTR(S,l_file_pos_tbl_type(48).file_pos,TO_NUMBER(EREC_EM.POSITION49)); l_file_pos_tbl_type(49).file_pos:= l_file_pos_tbl_type(48).file_pos+TO_NUMBER(EREC_EM.POSITION49); END IF;
+IF EREC_EM.POSITION50  IS NOT NULL THEN l_file_data_tbl_type(50).file_val:=SUBSTR(S,l_file_pos_tbl_type(49).file_pos,TO_NUMBER(EREC_EM.POSITION50)); l_file_pos_tbl_type(50).file_pos:= l_file_pos_tbl_type(49).file_pos+TO_NUMBER(EREC_EM.POSITION50); END IF;
+IF EREC_EM.POSITION51  IS NOT NULL THEN l_file_data_tbl_type(51).file_val:=SUBSTR(S,l_file_pos_tbl_type(50).file_pos,TO_NUMBER(EREC_EM.POSITION51)); l_file_pos_tbl_type(51).file_pos:= l_file_pos_tbl_type(50).file_pos+TO_NUMBER(EREC_EM.POSITION51); END IF;
+IF EREC_EM.POSITION52  IS NOT NULL THEN l_file_data_tbl_type(52).file_val:=SUBSTR(S,l_file_pos_tbl_type(51).file_pos,TO_NUMBER(EREC_EM.POSITION52)); l_file_pos_tbl_type(52).file_pos:= l_file_pos_tbl_type(51).file_pos+TO_NUMBER(EREC_EM.POSITION52); END IF;
+IF EREC_EM.POSITION53  IS NOT NULL THEN l_file_data_tbl_type(53).file_val:=SUBSTR(S,l_file_pos_tbl_type(52).file_pos,TO_NUMBER(EREC_EM.POSITION53)); l_file_pos_tbl_type(53).file_pos:= l_file_pos_tbl_type(52).file_pos+TO_NUMBER(EREC_EM.POSITION53); END IF;
+IF EREC_EM.POSITION54  IS NOT NULL THEN l_file_data_tbl_type(54).file_val:=SUBSTR(S,l_file_pos_tbl_type(53).file_pos,TO_NUMBER(EREC_EM.POSITION54)); l_file_pos_tbl_type(54).file_pos:= l_file_pos_tbl_type(53).file_pos+TO_NUMBER(EREC_EM.POSITION54); END IF;
+IF EREC_EM.POSITION55  IS NOT NULL THEN l_file_data_tbl_type(55).file_val:=SUBSTR(S,l_file_pos_tbl_type(54).file_pos,TO_NUMBER(EREC_EM.POSITION55)); l_file_pos_tbl_type(55).file_pos:= l_file_pos_tbl_type(54).file_pos+TO_NUMBER(EREC_EM.POSITION55); END IF;
+IF EREC_EM.POSITION56  IS NOT NULL THEN l_file_data_tbl_type(56).file_val:=SUBSTR(S,l_file_pos_tbl_type(55).file_pos,TO_NUMBER(EREC_EM.POSITION56)); l_file_pos_tbl_type(56).file_pos:= l_file_pos_tbl_type(55).file_pos+TO_NUMBER(EREC_EM.POSITION56); END IF;
+IF EREC_EM.POSITION57  IS NOT NULL THEN l_file_data_tbl_type(57).file_val:=SUBSTR(S,l_file_pos_tbl_type(56).file_pos,TO_NUMBER(EREC_EM.POSITION57)); l_file_pos_tbl_type(57).file_pos:= l_file_pos_tbl_type(56).file_pos+TO_NUMBER(EREC_EM.POSITION57); END IF;
+IF EREC_EM.POSITION58  IS NOT NULL THEN l_file_data_tbl_type(58).file_val:=SUBSTR(S,l_file_pos_tbl_type(57).file_pos,TO_NUMBER(EREC_EM.POSITION58)); l_file_pos_tbl_type(58).file_pos:= l_file_pos_tbl_type(57).file_pos+TO_NUMBER(EREC_EM.POSITION58); END IF;
+IF EREC_EM.POSITION59  IS NOT NULL THEN l_file_data_tbl_type(59).file_val:=SUBSTR(S,l_file_pos_tbl_type(58).file_pos,TO_NUMBER(EREC_EM.POSITION59)); l_file_pos_tbl_type(59).file_pos:= l_file_pos_tbl_type(58).file_pos+TO_NUMBER(EREC_EM.POSITION59); END IF;
+IF EREC_EM.POSITION60  IS NOT NULL THEN l_file_data_tbl_type(60).file_val:=SUBSTR(S,l_file_pos_tbl_type(59).file_pos,TO_NUMBER(EREC_EM.POSITION60)); l_file_pos_tbl_type(60).file_pos:= l_file_pos_tbl_type(59).file_pos+TO_NUMBER(EREC_EM.POSITION60); END IF;
+IF EREC_EM.POSITION61  IS NOT NULL THEN l_file_data_tbl_type(61).file_val:=SUBSTR(S,l_file_pos_tbl_type(60).file_pos,TO_NUMBER(EREC_EM.POSITION61)); l_file_pos_tbl_type(61).file_pos:= l_file_pos_tbl_type(60).file_pos+TO_NUMBER(EREC_EM.POSITION61); END IF;
+IF EREC_EM.POSITION62  IS NOT NULL THEN l_file_data_tbl_type(62).file_val:=SUBSTR(S,l_file_pos_tbl_type(61).file_pos,TO_NUMBER(EREC_EM.POSITION62)); l_file_pos_tbl_type(62).file_pos:= l_file_pos_tbl_type(61).file_pos+TO_NUMBER(EREC_EM.POSITION62); END IF;
+IF EREC_EM.POSITION63  IS NOT NULL THEN l_file_data_tbl_type(63).file_val:=SUBSTR(S,l_file_pos_tbl_type(62).file_pos,TO_NUMBER(EREC_EM.POSITION63)); l_file_pos_tbl_type(63).file_pos:= l_file_pos_tbl_type(62).file_pos+TO_NUMBER(EREC_EM.POSITION63); END IF;
+IF EREC_EM.POSITION64  IS NOT NULL THEN l_file_data_tbl_type(64).file_val:=SUBSTR(S,l_file_pos_tbl_type(63).file_pos,TO_NUMBER(EREC_EM.POSITION64)); l_file_pos_tbl_type(64).file_pos:= l_file_pos_tbl_type(63).file_pos+TO_NUMBER(EREC_EM.POSITION64); END IF;
+IF EREC_EM.POSITION65  IS NOT NULL THEN l_file_data_tbl_type(65).file_val:=SUBSTR(S,l_file_pos_tbl_type(64).file_pos,TO_NUMBER(EREC_EM.POSITION65)); l_file_pos_tbl_type(65).file_pos:= l_file_pos_tbl_type(64).file_pos+TO_NUMBER(EREC_EM.POSITION65); END IF;
+IF EREC_EM.POSITION66  IS NOT NULL THEN l_file_data_tbl_type(66).file_val:=SUBSTR(S,l_file_pos_tbl_type(65).file_pos,TO_NUMBER(EREC_EM.POSITION66)); l_file_pos_tbl_type(66).file_pos:= l_file_pos_tbl_type(65).file_pos+TO_NUMBER(EREC_EM.POSITION66); END IF;
+IF EREC_EM.POSITION67  IS NOT NULL THEN l_file_data_tbl_type(67).file_val:=SUBSTR(S,l_file_pos_tbl_type(66).file_pos,TO_NUMBER(EREC_EM.POSITION67)); l_file_pos_tbl_type(67).file_pos:= l_file_pos_tbl_type(66).file_pos+TO_NUMBER(EREC_EM.POSITION67); END IF;
+IF EREC_EM.POSITION68  IS NOT NULL THEN l_file_data_tbl_type(68).file_val:=SUBSTR(S,l_file_pos_tbl_type(67).file_pos,TO_NUMBER(EREC_EM.POSITION68)); l_file_pos_tbl_type(68).file_pos:= l_file_pos_tbl_type(67).file_pos+TO_NUMBER(EREC_EM.POSITION68); END IF;
+IF EREC_EM.POSITION69  IS NOT NULL THEN l_file_data_tbl_type(69).file_val:=SUBSTR(S,l_file_pos_tbl_type(68).file_pos,TO_NUMBER(EREC_EM.POSITION69)); l_file_pos_tbl_type(69).file_pos:= l_file_pos_tbl_type(68).file_pos+TO_NUMBER(EREC_EM.POSITION69); END IF;
+IF EREC_EM.POSITION70  IS NOT NULL THEN l_file_data_tbl_type(70).file_val:=SUBSTR(S,l_file_pos_tbl_type(69).file_pos,TO_NUMBER(EREC_EM.POSITION70)); l_file_pos_tbl_type(70).file_pos:= l_file_pos_tbl_type(69).file_pos+TO_NUMBER(EREC_EM.POSITION70); END IF;
+IF EREC_EM.POSITION71  IS NOT NULL THEN l_file_data_tbl_type(71).file_val:=SUBSTR(S,l_file_pos_tbl_type(70).file_pos,TO_NUMBER(EREC_EM.POSITION71)); l_file_pos_tbl_type(71).file_pos:= l_file_pos_tbl_type(70).file_pos+TO_NUMBER(EREC_EM.POSITION71); END IF;
+IF EREC_EM.POSITION72  IS NOT NULL THEN l_file_data_tbl_type(72).file_val:=SUBSTR(S,l_file_pos_tbl_type(71).file_pos,TO_NUMBER(EREC_EM.POSITION72)); l_file_pos_tbl_type(72).file_pos:= l_file_pos_tbl_type(71).file_pos+TO_NUMBER(EREC_EM.POSITION72); END IF;
+IF EREC_EM.POSITION73  IS NOT NULL THEN l_file_data_tbl_type(73).file_val:=SUBSTR(S,l_file_pos_tbl_type(72).file_pos,TO_NUMBER(EREC_EM.POSITION73)); l_file_pos_tbl_type(73).file_pos:= l_file_pos_tbl_type(72).file_pos+TO_NUMBER(EREC_EM.POSITION73); END IF;
+IF EREC_EM.POSITION74  IS NOT NULL THEN l_file_data_tbl_type(74).file_val:=SUBSTR(S,l_file_pos_tbl_type(73).file_pos,TO_NUMBER(EREC_EM.POSITION74)); l_file_pos_tbl_type(74).file_pos:= l_file_pos_tbl_type(73).file_pos+TO_NUMBER(EREC_EM.POSITION74); END IF;
+IF EREC_EM.POSITION75  IS NOT NULL THEN l_file_data_tbl_type(75).file_val:=SUBSTR(S,l_file_pos_tbl_type(74).file_pos,TO_NUMBER(EREC_EM.POSITION75)); l_file_pos_tbl_type(75).file_pos:= l_file_pos_tbl_type(74).file_pos+TO_NUMBER(EREC_EM.POSITION75); END IF;
+IF EREC_EM.POSITION76  IS NOT NULL THEN l_file_data_tbl_type(76).file_val:=SUBSTR(S,l_file_pos_tbl_type(75).file_pos,TO_NUMBER(EREC_EM.POSITION76)); l_file_pos_tbl_type(76).file_pos:= l_file_pos_tbl_type(75).file_pos+TO_NUMBER(EREC_EM.POSITION76); END IF;
+IF EREC_EM.POSITION77  IS NOT NULL THEN l_file_data_tbl_type(77).file_val:=SUBSTR(S,l_file_pos_tbl_type(76).file_pos,TO_NUMBER(EREC_EM.POSITION77)); l_file_pos_tbl_type(77).file_pos:= l_file_pos_tbl_type(76).file_pos+TO_NUMBER(EREC_EM.POSITION77); END IF;
+IF EREC_EM.POSITION78  IS NOT NULL THEN l_file_data_tbl_type(78).file_val:=SUBSTR(S,l_file_pos_tbl_type(77).file_pos,TO_NUMBER(EREC_EM.POSITION78)); l_file_pos_tbl_type(78).file_pos:= l_file_pos_tbl_type(77).file_pos+TO_NUMBER(EREC_EM.POSITION78); END IF;
+IF EREC_EM.POSITION79  IS NOT NULL THEN l_file_data_tbl_type(79).file_val:=SUBSTR(S,l_file_pos_tbl_type(78).file_pos,TO_NUMBER(EREC_EM.POSITION79)); l_file_pos_tbl_type(79).file_pos:= l_file_pos_tbl_type(78).file_pos+TO_NUMBER(EREC_EM.POSITION79); END IF;
+IF EREC_EM.POSITION80  IS NOT NULL THEN l_file_data_tbl_type(80).file_val:=SUBSTR(S,l_file_pos_tbl_type(79).file_pos,TO_NUMBER(EREC_EM.POSITION80)); l_file_pos_tbl_type(80).file_pos:= l_file_pos_tbl_type(79).file_pos+TO_NUMBER(EREC_EM.POSITION80); END IF;
+IF EREC_EM.POSITION81  IS NOT NULL THEN l_file_data_tbl_type(81).file_val:=SUBSTR(S,l_file_pos_tbl_type(80).file_pos,TO_NUMBER(EREC_EM.POSITION81)); l_file_pos_tbl_type(81).file_pos:= l_file_pos_tbl_type(80).file_pos+TO_NUMBER(EREC_EM.POSITION81); END IF;
+IF EREC_EM.POSITION82  IS NOT NULL THEN l_file_data_tbl_type(82).file_val:=SUBSTR(S,l_file_pos_tbl_type(81).file_pos,TO_NUMBER(EREC_EM.POSITION82)); l_file_pos_tbl_type(82).file_pos:= l_file_pos_tbl_type(81).file_pos+TO_NUMBER(EREC_EM.POSITION82); END IF;
+IF EREC_EM.POSITION83  IS NOT NULL THEN l_file_data_tbl_type(83).file_val:=SUBSTR(S,l_file_pos_tbl_type(82).file_pos,TO_NUMBER(EREC_EM.POSITION83)); l_file_pos_tbl_type(83).file_pos:= l_file_pos_tbl_type(82).file_pos+TO_NUMBER(EREC_EM.POSITION83); END IF;
+IF EREC_EM.POSITION84  IS NOT NULL THEN l_file_data_tbl_type(84).file_val:=SUBSTR(S,l_file_pos_tbl_type(83).file_pos,TO_NUMBER(EREC_EM.POSITION84)); l_file_pos_tbl_type(84).file_pos:= l_file_pos_tbl_type(83).file_pos+TO_NUMBER(EREC_EM.POSITION84); END IF;
+IF EREC_EM.POSITION85  IS NOT NULL THEN l_file_data_tbl_type(85).file_val:=SUBSTR(S,l_file_pos_tbl_type(84).file_pos,TO_NUMBER(EREC_EM.POSITION85)); l_file_pos_tbl_type(85).file_pos:= l_file_pos_tbl_type(84).file_pos+TO_NUMBER(EREC_EM.POSITION85); END IF;
+IF EREC_EM.POSITION86  IS NOT NULL THEN l_file_data_tbl_type(86).file_val:=SUBSTR(S,l_file_pos_tbl_type(85).file_pos,TO_NUMBER(EREC_EM.POSITION86)); l_file_pos_tbl_type(86).file_pos:= l_file_pos_tbl_type(85).file_pos+TO_NUMBER(EREC_EM.POSITION86); END IF;
+IF EREC_EM.POSITION87  IS NOT NULL THEN l_file_data_tbl_type(87).file_val:=SUBSTR(S,l_file_pos_tbl_type(86).file_pos,TO_NUMBER(EREC_EM.POSITION87)); l_file_pos_tbl_type(87).file_pos:= l_file_pos_tbl_type(86).file_pos+TO_NUMBER(EREC_EM.POSITION87); END IF;
+
+
+
+INSERT INTO xx_THIRD_PARTY_PRE_STAGING(PARTY_NAME,FILE_NAME)
+VALUES(PN,FILENAME);
+
+select max(rowid) into ri from xx_THIRD_PARTY_PRE_STAGING
+where party_name = PN;
+
+for k in l_file_data_tbl_type.first..l_file_data_tbl_type.last loop
+dbms_output.put_line('Inside Update Loop '||k||'			   '||l_file_data_tbl_type(k).file_val);
+execute immediate 'update xx_THIRD_PARTY_PRE_STAGING set COLUMN'
+||k||
+' = '||''''||l_file_data_tbl_type(k).file_val||''''||', attribute1 = '||''''||EREC_EM.LINE_TYPE||''''||' where rowid = '
+||''''||ri||'''';
+end loop;
+
+
+C := C + 1;
+	EXCEPTION
+    	WHEN OTHERS THEN
+             DBMS_OUTPUT.PUT_LINE('SQL ERROR '||SQLERRM);
+
+
+END xx_READ_CONCATENATED;
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------
+--start of procedure  xx_THIRD_PARTY_MAPPING_procedure
+--------------------------------------------------------------------------------------------------------------------
+
+
+PROCEDURE xx_THIRD_PARTY_MAPPING_PROC(ERRBUF VARCHAR2,RETCODE VARCHAR2)
+IS
+
+
+PN VARCHAR2(250);
+FN VARCHAR2(250);
+RI ROWID;
+N NUMBER;
+K NUMBER;
+RL NUMBER;
+OI VARCHAR2(250);
+I NUMBER;
+LC NUMBER;
+HSYM VARCHAR2(250);
+CURSOR THRD_PRE_STG_CUR IS SELECT * FROM xx_THIRD_PARTY_PRE_STAGING where process_flag is null;
+CURSOR THRD_P_CUR(THIRD_PARTY_NAME VARCHAR2) IS SELECT * FROM xx_THIRD_PARTY_MAPPING WHERE PARTY_NAME LIKE TRIM(THIRD_PARTY_NAME);
+CURSOR THRD_P_MAP_CUR(THIRD_PARTY_NAME VARCHAR2,LI_TYPE VARCHAR2 DEFAULT 'S') IS SELECT * FROM xx_THIRD_PARTY_MAPPING WHERE PARTY_NAME LIKE TRIM(THIRD_PARTY_NAME) AND LINE_TYPE LIKE TRIM(LI_TYPE);
+IMAP THRD_P_MAP_CUR%ROWTYPE;
+IMAPI THRD_P_CUR%ROWTYPE;
+FETCH_FLAG NUMBER;
+C1 VARCHAR2(1000):=NULL;
+C2 VARCHAR2(1000):=NULL;
+C3 VARCHAR2(1000):=NULL;
+C4 VARCHAR2(1000):=NULL;
+C5 VARCHAR2(1000):=NULL;
+C6 VARCHAR2(1000):=NULL;
+C7 VARCHAR2(1000):=NULL;
+C8 VARCHAR2(1000):=NULL;
+C9 VARCHAR2(1000):=NULL;
+C10 VARCHAR2(1000):=NULL;
+C11 VARCHAR2(1000):=NULL;
+C12 VARCHAR2(1000):=NULL;
+C13 VARCHAR2(1000):=NULL;
+C14 VARCHAR2(1000):=NULL;
+C15 VARCHAR2(1000):=NULL;
+C16 VARCHAR2(1000):=NULL;
+C17 VARCHAR2(1000):=NULL;
+C18 VARCHAR2(1000):=NULL;
+C19 VARCHAR2(1000):=NULL;
+C20 VARCHAR2(1000):=NULL;
+C21 VARCHAR2(1000):=NULL;
+C22 VARCHAR2(1000):=NULL;
+C23 VARCHAR2(1000):=NULL;
+C24 VARCHAR2(1000):=NULL;
+C25 VARCHAR2(1000):=NULL;
+C26 VARCHAR2(1000):=NULL;
+C27 VARCHAR2(1000):=NULL;
+C28 VARCHAR2(1000):=NULL;
+C29 VARCHAR2(1000):=NULL;
+C30 VARCHAR2(1000):=NULL;
+C31 VARCHAR2(1000):=NULL;
+C32 VARCHAR2(1000):=NULL;
+C33 VARCHAR2(1000):=NULL;
+C34 VARCHAR2(1000):=NULL;
+C35 VARCHAR2(1000):=NULL;
+C36 VARCHAR2(1000):=NULL;
+C37 VARCHAR2(1000):=NULL;
+C38 VARCHAR2(1000):=NULL;
+C39 VARCHAR2(1000):=NULL;
+C40 VARCHAR2(1000):=NULL;
+C41 VARCHAR2(1000):=NULL;
+C42 VARCHAR2(1000):=NULL;
+C43 VARCHAR2(1000):=NULL;
+C44 VARCHAR2(1000):=NULL;
+C45 VARCHAR2(1000):=NULL;
+C46 VARCHAR2(1000):=NULL;
+C47 VARCHAR2(1000):=NULL;
+C48 VARCHAR2(1000):=NULL;
+C49 VARCHAR2(1000):=NULL;
+C50 VARCHAR2(1000):=NULL;
+C51 VARCHAR2(1000):=NULL;
+C52 VARCHAR2(1000):=NULL;
+C53 VARCHAR2(1000):=NULL;
+C54 VARCHAR2(1000):=NULL;
+C55 VARCHAR2(1000):=NULL;
+C56 VARCHAR2(1000):=NULL;
+C57 VARCHAR2(1000):=NULL;
+C58 VARCHAR2(1000):=NULL;
+C59 VARCHAR2(1000):=NULL;
+C60 VARCHAR2(1000):=NULL;
+C61 VARCHAR2(1000):=NULL;
+C62 VARCHAR2(1000):=NULL;
+C63 VARCHAR2(1000):=NULL;
+C64 VARCHAR2(1000):=NULL;
+C65 VARCHAR2(1000):=NULL;
+C66 VARCHAR2(1000):=NULL;
+C67 VARCHAR2(1000):=NULL;
+C68 VARCHAR2(1000):=NULL;
+C69 VARCHAR2(1000):=NULL;
+C70 VARCHAR2(1000):=NULL;
+C71 VARCHAR2(1000):=NULL;
+C72 VARCHAR2(1000):=NULL;
+C73 VARCHAR2(1000):=NULL;
+C74 VARCHAR2(1000):=NULL;
+C75 VARCHAR2(1000):=NULL;
+C76 VARCHAR2(1000):=NULL;
+C77 VARCHAR2(1000):=NULL;
+C78 VARCHAR2(1000):=NULL;
+C79 VARCHAR2(1000):=NULL;
+C80 VARCHAR2(1000):=NULL;
+C81 VARCHAR2(1000):=NULL;
+C82 VARCHAR2(1000):=NULL;
+C83 VARCHAR2(1000):=NULL;
+C84 VARCHAR2(1000):=NULL;
+C85 VARCHAR2(1000):=NULL;
+C86 VARCHAR2(1000):=NULL;
+C87 VARCHAR2(1000):=NULL;
+C88 VARCHAR2(1000):=NULL;
+D1   VARCHAR2(1000):=NULL;
+D2   VARCHAR2(1000):=NULL;
+D3   VARCHAR2(1000):=NULL;
+D4   VARCHAR2(1000):=NULL;
+D5   VARCHAR2(1000):=NULL;
+D6   VARCHAR2(1000):=NULL;
+D7   VARCHAR2(1000):=NULL;
+D8   VARCHAR2(1000):=NULL;
+D9   VARCHAR2(1000):=NULL;
+D10   VARCHAR2(1000):=NULL;
+D11   VARCHAR2(1000):=NULL;
+D12   VARCHAR2(1000):=NULL;
+D13   VARCHAR2(1000):=NULL;
+D14   VARCHAR2(1000):=NULL;
+D15   VARCHAR2(1000):=NULL;
+D16   VARCHAR2(1000):=NULL;
+D17   VARCHAR2(1000):=NULL;
+D18   VARCHAR2(1000):=NULL;
+D19   VARCHAR2(1000):=NULL;
+D20   VARCHAR2(1000):=NULL;
+D21   VARCHAR2(1000):=NULL;
+D22   VARCHAR2(1000):=NULL;
+D23   VARCHAR2(1000):=NULL;
+D24   VARCHAR2(1000):=NULL;
+D25   VARCHAR2(1000):=NULL;
+D26   VARCHAR2(1000):=NULL;
+D27   VARCHAR2(1000):=NULL;
+D28   VARCHAR2(1000):=NULL;
+D29   VARCHAR2(1000):=NULL;
+D30   VARCHAR2(1000):=NULL;
+D31   VARCHAR2(1000):=NULL;
+D32   VARCHAR2(1000):=NULL;
+D33   VARCHAR2(1000):=NULL;
+D34   VARCHAR2(1000):=NULL;
+D35   VARCHAR2(1000):=NULL;
+D36   VARCHAR2(1000):=NULL;
+D37   VARCHAR2(1000):=NULL;
+D38   VARCHAR2(1000):=NULL;
+D39   VARCHAR2(1000):=NULL;
+D40   VARCHAR2(1000):=NULL;
+D41   VARCHAR2(1000):=NULL;
+D42   VARCHAR2(1000):=NULL;
+D43   VARCHAR2(1000):=NULL;
+D44   VARCHAR2(1000):=NULL;
+D45   VARCHAR2(1000):=NULL;
+D46   VARCHAR2(1000):=NULL;
+D47   VARCHAR2(1000):=NULL;
+D48   VARCHAR2(1000):=NULL;
+D49   VARCHAR2(1000):=NULL;
+D50   VARCHAR2(1000):=NULL;
+D51   VARCHAR2(1000):=NULL;
+D52   VARCHAR2(1000):=NULL;
+D53   VARCHAR2(1000):=NULL;
+D54   VARCHAR2(1000):=NULL;
+D55   VARCHAR2(1000):=NULL;
+D56   VARCHAR2(1000):=NULL;
+D57   VARCHAR2(1000):=NULL;
+D58   VARCHAR2(1000):=NULL;
+D59   VARCHAR2(1000):=NULL;
+D60   VARCHAR2(1000):=NULL;
+D61   VARCHAR2(1000):=NULL;
+D62   VARCHAR2(1000):=NULL;
+D63   VARCHAR2(1000):=NULL;
+D64   VARCHAR2(1000):=NULL;
+D65   VARCHAR2(1000):=NULL;
+D66   VARCHAR2(1000):=NULL;
+D67   VARCHAR2(1000):=NULL;
+D68   VARCHAR2(1000):=NULL;
+D69   VARCHAR2(1000):=NULL;
+D70   VARCHAR2(1000):=NULL;
+D71   VARCHAR2(1000):=NULL;
+D72   VARCHAR2(1000):=NULL;
+D73   VARCHAR2(1000):=NULL;
+D74   VARCHAR2(1000):=NULL;
+D75   VARCHAR2(1000):=NULL;
+D76   VARCHAR2(1000):=NULL;
+D77   VARCHAR2(1000):=NULL;
+D78   VARCHAR2(1000):=NULL;
+D79   VARCHAR2(1000):=NULL;
+D80   VARCHAR2(1000):=NULL;
+D81   VARCHAR2(1000):=NULL;
+D82   VARCHAR2(1000):=NULL;
+D83   VARCHAR2(1000):=NULL;
+D84   VARCHAR2(1000):=NULL;
+D85   VARCHAR2(1000):=NULL;
+D86   VARCHAR2(1000):=NULL;
+D87   VARCHAR2(1000):=NULL;
+D88   VARCHAR2(1000):=NULL;
+
+BD1  VARCHAR2(1000) :=NULL;
+BD2  VARCHAR2(1000) :=NULL;
+BD3  VARCHAR2(1000) :=NULL;
+BD4  VARCHAR2(1000) :=NULL;
+BD5  VARCHAR2(1000) :=NULL;
+BD6  VARCHAR2(1000) :=NULL;
+BD7  VARCHAR2(1000) :=NULL;
+BD8  VARCHAR2(1000) :=NULL;
+BD9  VARCHAR2(1000) :=NULL;
+BD10  VARCHAR2(1000) :=NULL;
+BD11  VARCHAR2(1000) :=NULL;
+BD12  VARCHAR2(1000) :=NULL;
+BD13  VARCHAR2(1000) :=NULL;
+BD14  VARCHAR2(1000) :=NULL;
+BD15  VARCHAR2(1000) :=NULL;
+BD16  VARCHAR2(1000) :=NULL;
+BD17  VARCHAR2(1000) :=NULL;
+BD18  VARCHAR2(1000) :=NULL;
+BD19  VARCHAR2(1000) :=NULL;
+BD20  VARCHAR2(1000) :=NULL;
+BD21  VARCHAR2(1000) :=NULL;
+BD22  VARCHAR2(1000) :=NULL;
+BD23  VARCHAR2(1000) :=NULL;
+BD24  VARCHAR2(1000) :=NULL;
+BD25  VARCHAR2(1000) :=NULL;
+BD26  VARCHAR2(1000) :=NULL;
+BD27  VARCHAR2(1000) :=NULL;
+BD28  VARCHAR2(1000) :=NULL;
+BD29  VARCHAR2(1000) :=NULL;
+BD30  VARCHAR2(1000) :=NULL;
+BD31  VARCHAR2(1000) :=NULL;
+BD32  VARCHAR2(1000) :=NULL;
+BD33  VARCHAR2(1000) :=NULL;
+BD34  VARCHAR2(1000) :=NULL;
+BD35  VARCHAR2(1000) :=NULL;
+BD36  VARCHAR2(1000) :=NULL;
+BD37  VARCHAR2(1000) :=NULL;
+BD38  VARCHAR2(1000) :=NULL;
+BD39  VARCHAR2(1000) :=NULL;
+BD40  VARCHAR2(1000) :=NULL;
+BD41  VARCHAR2(1000) :=NULL;
+BD42  VARCHAR2(1000) :=NULL;
+BD43  VARCHAR2(1000) :=NULL;
+BD44  VARCHAR2(1000) :=NULL;
+BD45  VARCHAR2(1000) :=NULL;
+BD46  VARCHAR2(1000) :=NULL;
+BD47  VARCHAR2(1000) :=NULL;
+BD48  VARCHAR2(1000) :=NULL;
+BD49  VARCHAR2(1000) :=NULL;
+BD50  VARCHAR2(1000) :=NULL;
+BD51  VARCHAR2(1000) :=NULL;
+BD52  VARCHAR2(1000) :=NULL;
+BD53  VARCHAR2(1000) :=NULL;
+BD54  VARCHAR2(1000) :=NULL;
+BD55  VARCHAR2(1000) :=NULL;
+BD56  VARCHAR2(1000) :=NULL;
+BD57  VARCHAR2(1000) :=NULL;
+BD58  VARCHAR2(1000) :=NULL;
+BD59  VARCHAR2(1000) :=NULL;
+BD60  VARCHAR2(1000) :=NULL;
+BD61  VARCHAR2(1000) :=NULL;
+BD62  VARCHAR2(1000) :=NULL;
+BD63  VARCHAR2(1000) :=NULL;
+BD64  VARCHAR2(1000) :=NULL;
+BD65  VARCHAR2(1000) :=NULL;
+BD66  VARCHAR2(1000) :=NULL;
+BD67  VARCHAR2(1000) :=NULL;
+BD68  VARCHAR2(1000) :=NULL;
+BD69  VARCHAR2(1000) :=NULL;
+BD70  VARCHAR2(1000) :=NULL;
+BD71  VARCHAR2(1000) :=NULL;
+BD72  VARCHAR2(1000) :=NULL;
+BD73  VARCHAR2(1000) :=NULL;
+BD74  VARCHAR2(1000) :=NULL;
+BD75  VARCHAR2(1000) :=NULL;
+BD76  VARCHAR2(1000) :=NULL;
+BD77  VARCHAR2(1000) :=NULL;
+BD78  VARCHAR2(1000) :=NULL;
+BD79  VARCHAR2(1000) :=NULL;
+BD80  VARCHAR2(1000) :=NULL;
+BD81  VARCHAR2(1000) :=NULL;
+BD82  VARCHAR2(1000) :=NULL;
+BD83  VARCHAR2(1000) :=NULL;
+BD84  VARCHAR2(1000) :=NULL;
+BD85  VARCHAR2(1000) :=NULL;
+BD86  VARCHAR2(1000) :=NULL;
+BD87  VARCHAR2(1000) :=NULL;
+BD88  VARCHAR2(1000) :=NULL;
+
+
+
+
+
+
+PROCEDURE D_ASSIGN(THRD_P_PRE_STG_R xx_THIRD_PARTY_PRE_STAGING%ROWTYPE) IS
+BEGIN
+D1   :=THRD_P_PRE_STG_R.COLUMN1;
+D2   :=THRD_P_PRE_STG_R.COLUMN2;
+D3   :=THRD_P_PRE_STG_R.COLUMN3;
+D4   :=THRD_P_PRE_STG_R.COLUMN4;
+D5   :=THRD_P_PRE_STG_R.COLUMN5;
+D6   :=THRD_P_PRE_STG_R.COLUMN6;
+D7   :=THRD_P_PRE_STG_R.COLUMN7;
+D8   :=THRD_P_PRE_STG_R.COLUMN8;
+D9   :=THRD_P_PRE_STG_R.COLUMN9;
+D10   :=THRD_P_PRE_STG_R.COLUMN10;
+D11   :=THRD_P_PRE_STG_R.COLUMN11;
+D12   :=THRD_P_PRE_STG_R.COLUMN12;
+D13   :=THRD_P_PRE_STG_R.COLUMN13;
+D14   :=THRD_P_PRE_STG_R.COLUMN14;
+D15   :=THRD_P_PRE_STG_R.COLUMN15;
+D16   :=THRD_P_PRE_STG_R.COLUMN16;
+D17   :=THRD_P_PRE_STG_R.COLUMN17;
+D18   :=THRD_P_PRE_STG_R.COLUMN18;
+D19   :=THRD_P_PRE_STG_R.COLUMN19;
+D20   :=THRD_P_PRE_STG_R.COLUMN20;
+D21   :=THRD_P_PRE_STG_R.COLUMN21;
+D22   :=THRD_P_PRE_STG_R.COLUMN22;
+D23   :=THRD_P_PRE_STG_R.COLUMN23;
+D24   :=THRD_P_PRE_STG_R.COLUMN24;
+D25   :=THRD_P_PRE_STG_R.COLUMN25;
+D26   :=THRD_P_PRE_STG_R.COLUMN26;
+D27   :=THRD_P_PRE_STG_R.COLUMN27;
+D28   :=THRD_P_PRE_STG_R.COLUMN28;
+D29   :=THRD_P_PRE_STG_R.COLUMN29;
+D30   :=THRD_P_PRE_STG_R.COLUMN30;
+D31   :=THRD_P_PRE_STG_R.COLUMN31;
+D32   :=THRD_P_PRE_STG_R.COLUMN32;
+D33   :=THRD_P_PRE_STG_R.COLUMN33;
+D34   :=THRD_P_PRE_STG_R.COLUMN34;
+D35   :=THRD_P_PRE_STG_R.COLUMN35;
+D36   :=THRD_P_PRE_STG_R.COLUMN36;
+D37   :=THRD_P_PRE_STG_R.COLUMN37;
+D38   :=THRD_P_PRE_STG_R.COLUMN38;
+D39   :=THRD_P_PRE_STG_R.COLUMN39;
+D40   :=THRD_P_PRE_STG_R.COLUMN40;
+D41   :=THRD_P_PRE_STG_R.COLUMN41;
+D42   :=THRD_P_PRE_STG_R.COLUMN42;
+D43   :=THRD_P_PRE_STG_R.COLUMN43;
+D44   :=THRD_P_PRE_STG_R.COLUMN44;
+D45   :=THRD_P_PRE_STG_R.COLUMN45;
+D46   :=THRD_P_PRE_STG_R.COLUMN46;
+D47   :=THRD_P_PRE_STG_R.COLUMN47;
+D48   :=THRD_P_PRE_STG_R.COLUMN48;
+D49   :=THRD_P_PRE_STG_R.COLUMN49;
+D50   :=THRD_P_PRE_STG_R.COLUMN50;
+D51   :=THRD_P_PRE_STG_R.COLUMN51;
+D52   :=THRD_P_PRE_STG_R.COLUMN52;
+D53   :=THRD_P_PRE_STG_R.COLUMN53;
+D54   :=THRD_P_PRE_STG_R.COLUMN54;
+D55   :=THRD_P_PRE_STG_R.COLUMN55;
+D56   :=THRD_P_PRE_STG_R.COLUMN56;
+D57   :=THRD_P_PRE_STG_R.COLUMN57;
+D58   :=THRD_P_PRE_STG_R.COLUMN58;
+D59   :=THRD_P_PRE_STG_R.COLUMN59;
+D60   :=THRD_P_PRE_STG_R.COLUMN60;
+D61   :=THRD_P_PRE_STG_R.COLUMN61;
+D62   :=THRD_P_PRE_STG_R.COLUMN62;
+D63   :=THRD_P_PRE_STG_R.COLUMN63;
+D64   :=THRD_P_PRE_STG_R.COLUMN64;
+D65   :=THRD_P_PRE_STG_R.COLUMN65;
+D66   :=THRD_P_PRE_STG_R.COLUMN66;
+D67   :=THRD_P_PRE_STG_R.COLUMN67;
+D68   :=THRD_P_PRE_STG_R.COLUMN68;
+D69   :=THRD_P_PRE_STG_R.COLUMN69;
+D70   :=THRD_P_PRE_STG_R.COLUMN70;
+D71   :=THRD_P_PRE_STG_R.COLUMN71;
+D72   :=THRD_P_PRE_STG_R.COLUMN72;
+D73   :=THRD_P_PRE_STG_R.COLUMN73;
+D74   :=THRD_P_PRE_STG_R.COLUMN74;
+D75   :=THRD_P_PRE_STG_R.COLUMN75;
+D76   :=THRD_P_PRE_STG_R.COLUMN76;
+D77   :=THRD_P_PRE_STG_R.COLUMN77;
+D78   :=THRD_P_PRE_STG_R.COLUMN78;
+D79   :=THRD_P_PRE_STG_R.COLUMN79;
+D80   :=THRD_P_PRE_STG_R.COLUMN80;
+D81   :=THRD_P_PRE_STG_R.COLUMN81;
+D82   :=THRD_P_PRE_STG_R.COLUMN82;
+D83   :=THRD_P_PRE_STG_R.COLUMN83;
+D84   :=THRD_P_PRE_STG_R.COLUMN84;
+D85   :=THRD_P_PRE_STG_R.COLUMN85;
+D86   :=THRD_P_PRE_STG_R.COLUMN86;
+D87   :=THRD_P_PRE_STG_R.COLUMN87;
+D88   :=THRD_P_PRE_STG_R.COLUMN88;
+END;
+PROCEDURE H_BKUP(THRBD_P_PRE_STG_R xx_THIRD_PARTY_PRE_STAGING%ROWTYPE)IS
+BEGIN
+BD1   :=THRBD_P_PRE_STG_R.COLUMN1;
+BD2   :=THRBD_P_PRE_STG_R.COLUMN2;
+BD3   :=THRBD_P_PRE_STG_R.COLUMN3;
+BD4   :=THRBD_P_PRE_STG_R.COLUMN4;
+BD5   :=THRBD_P_PRE_STG_R.COLUMN5;
+BD6   :=THRBD_P_PRE_STG_R.COLUMN6;
+BD7   :=THRBD_P_PRE_STG_R.COLUMN7;
+BD8   :=THRBD_P_PRE_STG_R.COLUMN8;
+BD9   :=THRBD_P_PRE_STG_R.COLUMN9;
+BD10   :=THRBD_P_PRE_STG_R.COLUMN10;
+BD11   :=THRBD_P_PRE_STG_R.COLUMN11;
+BD12   :=THRBD_P_PRE_STG_R.COLUMN12;
+BD13   :=THRBD_P_PRE_STG_R.COLUMN13;
+BD14   :=THRBD_P_PRE_STG_R.COLUMN14;
+BD15   :=THRBD_P_PRE_STG_R.COLUMN15;
+BD16   :=THRBD_P_PRE_STG_R.COLUMN16;
+BD17   :=THRBD_P_PRE_STG_R.COLUMN17;
+BD18   :=THRBD_P_PRE_STG_R.COLUMN18;
+BD19   :=THRBD_P_PRE_STG_R.COLUMN19;
+BD20   :=THRBD_P_PRE_STG_R.COLUMN20;
+BD21   :=THRBD_P_PRE_STG_R.COLUMN21;
+BD22   :=THRBD_P_PRE_STG_R.COLUMN22;
+BD23   :=THRBD_P_PRE_STG_R.COLUMN23;
+BD24   :=THRBD_P_PRE_STG_R.COLUMN24;
+BD25   :=THRBD_P_PRE_STG_R.COLUMN25;
+BD26   :=THRBD_P_PRE_STG_R.COLUMN26;
+BD27   :=THRBD_P_PRE_STG_R.COLUMN27;
+BD28   :=THRBD_P_PRE_STG_R.COLUMN28;
+BD29   :=THRBD_P_PRE_STG_R.COLUMN29;
+BD30   :=THRBD_P_PRE_STG_R.COLUMN30;
+BD31   :=THRBD_P_PRE_STG_R.COLUMN31;
+BD32   :=THRBD_P_PRE_STG_R.COLUMN32;
+BD33   :=THRBD_P_PRE_STG_R.COLUMN33;
+BD34   :=THRBD_P_PRE_STG_R.COLUMN34;
+BD35   :=THRBD_P_PRE_STG_R.COLUMN35;
+BD36   :=THRBD_P_PRE_STG_R.COLUMN36;
+BD37   :=THRBD_P_PRE_STG_R.COLUMN37;
+BD38   :=THRBD_P_PRE_STG_R.COLUMN38;
+BD39   :=THRBD_P_PRE_STG_R.COLUMN39;
+BD40   :=THRBD_P_PRE_STG_R.COLUMN40;
+BD41   :=THRBD_P_PRE_STG_R.COLUMN41;
+BD42   :=THRBD_P_PRE_STG_R.COLUMN42;
+BD43   :=THRBD_P_PRE_STG_R.COLUMN43;
+BD44   :=THRBD_P_PRE_STG_R.COLUMN44;
+BD45   :=THRBD_P_PRE_STG_R.COLUMN45;
+BD46   :=THRBD_P_PRE_STG_R.COLUMN46;
+BD47   :=THRBD_P_PRE_STG_R.COLUMN47;
+BD48   :=THRBD_P_PRE_STG_R.COLUMN48;
+BD49   :=THRBD_P_PRE_STG_R.COLUMN49;
+BD50   :=THRBD_P_PRE_STG_R.COLUMN50;
+BD51   :=THRBD_P_PRE_STG_R.COLUMN51;
+BD52   :=THRBD_P_PRE_STG_R.COLUMN52;
+BD53   :=THRBD_P_PRE_STG_R.COLUMN53;
+BD54   :=THRBD_P_PRE_STG_R.COLUMN54;
+BD55   :=THRBD_P_PRE_STG_R.COLUMN55;
+BD56   :=THRBD_P_PRE_STG_R.COLUMN56;
+BD57   :=THRBD_P_PRE_STG_R.COLUMN57;
+BD58   :=THRBD_P_PRE_STG_R.COLUMN58;
+BD59   :=THRBD_P_PRE_STG_R.COLUMN59;
+BD60   :=THRBD_P_PRE_STG_R.COLUMN60;
+BD61   :=THRBD_P_PRE_STG_R.COLUMN61;
+BD62   :=THRBD_P_PRE_STG_R.COLUMN62;
+BD63   :=THRBD_P_PRE_STG_R.COLUMN63;
+BD64   :=THRBD_P_PRE_STG_R.COLUMN64;
+BD65   :=THRBD_P_PRE_STG_R.COLUMN65;
+BD66   :=THRBD_P_PRE_STG_R.COLUMN66;
+BD67   :=THRBD_P_PRE_STG_R.COLUMN67;
+BD68   :=THRBD_P_PRE_STG_R.COLUMN68;
+BD69   :=THRBD_P_PRE_STG_R.COLUMN69;
+BD70   :=THRBD_P_PRE_STG_R.COLUMN70;
+BD71   :=THRBD_P_PRE_STG_R.COLUMN71;
+BD72   :=THRBD_P_PRE_STG_R.COLUMN72;
+BD73   :=THRBD_P_PRE_STG_R.COLUMN73;
+BD74   :=THRBD_P_PRE_STG_R.COLUMN74;
+BD75   :=THRBD_P_PRE_STG_R.COLUMN75;
+BD76   :=THRBD_P_PRE_STG_R.COLUMN76;
+BD77   :=THRBD_P_PRE_STG_R.COLUMN77;
+BD78   :=THRBD_P_PRE_STG_R.COLUMN78;
+BD79   :=THRBD_P_PRE_STG_R.COLUMN79;
+BD80   :=THRBD_P_PRE_STG_R.COLUMN80;
+BD81   :=THRBD_P_PRE_STG_R.COLUMN81;
+BD82   :=THRBD_P_PRE_STG_R.COLUMN82;
+BD83   :=THRBD_P_PRE_STG_R.COLUMN83;
+BD84   :=THRBD_P_PRE_STG_R.COLUMN84;
+BD85   :=THRBD_P_PRE_STG_R.COLUMN85;
+BD86   :=THRBD_P_PRE_STG_R.COLUMN86;
+BD87   :=THRBD_P_PRE_STG_R.COLUMN87;
+BD88   :=THRBD_P_PRE_STG_R.COLUMN88;
+END;
+
+
+PROCEDURE P_ASSIGN(IMAP xx_THIRD_PARTY_MAPPING%ROWTYPE) IS
+BEGIN
+C1   :=IMAP.COLUMN1;
+C2   :=IMAP.COLUMN2;
+C3   :=IMAP.COLUMN3;
+C4   :=IMAP.COLUMN4;
+C5   :=IMAP.COLUMN5;
+C6   :=IMAP.COLUMN6;
+C7   :=IMAP.COLUMN7;
+C8   :=IMAP.COLUMN8;
+C9   :=IMAP.COLUMN9;
+C10   :=IMAP.COLUMN10;
+C11   :=IMAP.COLUMN11;
+C12   :=IMAP.COLUMN12;
+C13   :=IMAP.COLUMN13;
+C14   :=IMAP.COLUMN14;
+C15   :=IMAP.COLUMN15;
+C16   :=IMAP.COLUMN16;
+C17   :=IMAP.COLUMN17;
+C18   :=IMAP.COLUMN18;
+C19   :=IMAP.COLUMN19;
+C20   :=IMAP.COLUMN20;
+C21   :=IMAP.COLUMN21;
+C22   :=IMAP.COLUMN22;
+C23   :=IMAP.COLUMN23;
+C24   :=IMAP.COLUMN24;
+C25   :=IMAP.COLUMN25;
+C26   :=IMAP.COLUMN26;
+C27   :=IMAP.COLUMN27;
+C28   :=IMAP.COLUMN28;
+C29   :=IMAP.COLUMN29;
+C30   :=IMAP.COLUMN30;
+C31   :=IMAP.COLUMN31;
+C32   :=IMAP.COLUMN32;
+C33   :=IMAP.COLUMN33;
+C34   :=IMAP.COLUMN34;
+C35   :=IMAP.COLUMN35;
+C36   :=IMAP.COLUMN36;
+C37   :=IMAP.COLUMN37;
+C38   :=IMAP.COLUMN38;
+C39   :=IMAP.COLUMN39;
+C40   :=IMAP.COLUMN40;
+C41   :=IMAP.COLUMN41;
+C42   :=IMAP.COLUMN42;
+C43   :=IMAP.COLUMN43;
+C44   :=IMAP.COLUMN44;
+C45   :=IMAP.COLUMN45;
+C46   :=IMAP.COLUMN46;
+C47   :=IMAP.COLUMN47;
+C48   :=IMAP.COLUMN48;
+C49   :=IMAP.COLUMN49;
+C50   :=IMAP.COLUMN50;
+C51   :=IMAP.COLUMN51;
+C52   :=IMAP.COLUMN52;
+C53   :=IMAP.COLUMN53;
+C54   :=IMAP.COLUMN54;
+C55   :=IMAP.COLUMN55;
+C56   :=IMAP.COLUMN56;
+C57   :=IMAP.COLUMN57;
+C58   :=IMAP.COLUMN58;
+C59   :=IMAP.COLUMN59;
+C60   :=IMAP.COLUMN60;
+C61   :=IMAP.COLUMN61;
+C62   :=IMAP.COLUMN62;
+C63   :=IMAP.COLUMN63;
+C64   :=IMAP.COLUMN64;
+C65   :=IMAP.COLUMN65;
+C66   :=IMAP.COLUMN66;
+C67   :=IMAP.COLUMN67;
+C68   :=IMAP.COLUMN68;
+C69   :=IMAP.COLUMN69;
+C70   :=IMAP.COLUMN70;
+C71   :=IMAP.COLUMN71;
+C72   :=IMAP.COLUMN72;
+C73   :=IMAP.COLUMN73;
+C74   :=IMAP.COLUMN74;
+C75   :=IMAP.COLUMN75;
+C76   :=IMAP.COLUMN76;
+C77   :=IMAP.COLUMN77;
+C78   :=IMAP.COLUMN78;
+C79   :=IMAP.COLUMN79;
+C80   :=IMAP.COLUMN80;
+C81   :=IMAP.COLUMN81;
+C82   :=IMAP.COLUMN82;
+C83   :=IMAP.COLUMN83;
+C84   :=IMAP.COLUMN84;
+C85   :=IMAP.COLUMN85;
+C86   :=IMAP.COLUMN86;
+C87   :=IMAP.COLUMN87;
+C88   :=IMAP.COLUMN88;
+END;
+
+PROCEDURE MISC_MAP IS
+CURSOR C1 IS SELECT * FROM xx_THIRD_PARTY_STAGING  FOR UPDATE OF CREATION_DATE;
+EREC C1%ROWTYPE;
+BEGIN
+FOR EREC IN C1 LOOP
+
+IF EREC.BUYER_FULL_NAME||EREC.BUYER_FIRST_NAME||EREC.BUYER_LAST_NAME IS NULL THEN
+UPDATE xx_THIRD_PARTY_STAGING SET
+ BUYER_FULL_NAME   = EREC.SHIP_TO_NAME
+,BUYER_FIRST_NAME  = EREC.SHIP_TO_FIRST_NAME
+,BUYER_LAST_NAME   = EREC.SHIP_TO_LAST_NAME
+WHERE ROW_SEQUENCE= EREC.ROW_SEQUENCE;
+END IF;
+
+IF EREC.SHIP_TO_NAME||EREC.SHIP_TO_FIRST_NAME||EREC.SHIP_TO_LAST_NAME IS NULL THEN
+UPDATE xx_THIRD_PARTY_STAGING SET
+ SHIP_TO_NAME       = EREC.BUYER_FULL_NAME
+,SHIP_TO_FIRST_NAME = EREC.BUYER_FIRST_NAME
+,SHIP_TO_LAST_NAME  = EREC.BUYER_LAST_NAME
+ WHERE ROW_SEQUENCE=EREC.ROW_SEQUENCE;
+END IF;
+
+
+IF EREC.BUYER_ADDRESS_LINE1||EREC.BUYER_ADDRESS_LINE2||EREC.BUYER_ADDRESS_LINE3||EREC.BUYER_STATE
+||EREC.BUYER_CITY||EREC.BUYER_COUNTRY  IS NULL THEN
+UPDATE xx_THIRD_PARTY_STAGING SET
+ BUYER_ADDRESS_LINE1  = EREC.SHIP_TO_ADDRESS_LINE1
+,BUYER_ADDRESS_LINE2  = EREC.SHIP_TO_ADDRESS_LINE2
+,BUYER_ADDRESS_LINE3  = EREC.SHIP_TO_ADDRESS_LINE3
+,BUYER_STATE		  = EREC.SHIP_TO_STATE
+,BUYER_CITY			  = EREC.SHIP_TO_CITY
+,BUYER_COUNTRY		  = EREC.SHIP_TO_COUNTRY
+ WHERE ROW_SEQUENCE=EREC.ROW_SEQUENCE;
+END IF;
+
+
+IF EREC.SHIP_TO_ADDRESS_LINE1||EREC.SHIP_TO_ADDRESS_LINE2||EREC.SHIP_TO_ADDRESS_LINE3||EREC.SHIP_TO_STATE
+||EREC.SHIP_TO_CITY||EREC.SHIP_TO_COUNTRY IS NULL THEN
+UPDATE xx_THIRD_PARTY_STAGING SET
+ SHIP_TO_ADDRESS_LINE1 = EREC.BUYER_ADDRESS_LINE1
+,SHIP_TO_ADDRESS_LINE2 = EREC.BUYER_ADDRESS_LINE2
+,SHIP_TO_ADDRESS_LINE3 = EREC.BUYER_ADDRESS_LINE3
+,SHIP_TO_STATE         = EREC.BUYER_STATE
+,SHIP_TO_CITY		   = EREC.BUYER_CITY
+,SHIP_TO_COUNTRY       = EREC.BUYER_COUNTRY
+WHERE ROW_SEQUENCE=EREC.ROW_SEQUENCE;
+END IF;
+
+begin
+IF EREC.SHIPPING_PRICE like '0' OR EREC.SHIPPING_PRICE IS NULL THEN
+      	  UPDATE xx_THIRD_PARTY_STAGING
+	  		 SET
+			 SHIPPING_PRICE=EREC.SHIPPING_COST
+			 WHERE ROW_SEQUENCE=EREC.ROW_SEQUENCE;
+	END IF;
+exception
+when others then
+	 		null;
+end;
+
+
+
+IF EREC.ITEM_PRICE IS NULL OR EREC.ITEM_PRICE like '0' THEN
+UPDATE xx_THIRD_PARTY_STAGING SET ITEM_PRICE=EREC.TOTAL_AMOUNT
+WHERE ROW_SEQUENCE=EREC.ROW_SEQUENCE;
+END IF;
+
+END LOOP;
+UPDATE xx_THIRD_PARTY_STAGING SET LAST_UPDATE_DATE=SYSDATE;
+UPDATE xx_THIRD_PARTY_STAGING SET LAST_UPDATE_LOGIN=FND_GLOBAL.USER_ID;
+--update xx_third_party_staging set item_number='10005858';
+update xx_third_party_pre_staging set process_flag='P';
+COMMIT;
+
+
+END;
+
+PROCEDURE P_UPDATE(
+DA1 VARCHAR2,
+DA2 VARCHAR2,
+DA3 VARCHAR2,
+DA4 VARCHAR2,
+DA5 VARCHAR2,
+DA6 VARCHAR2,
+DA7 VARCHAR2,
+DA8 VARCHAR2,
+DA9 VARCHAR2,
+DA10 VARCHAR2,
+DA11 VARCHAR2,
+DA12 VARCHAR2,
+DA13 VARCHAR2,
+DA14 VARCHAR2,
+DA15 VARCHAR2,
+DA16 VARCHAR2,
+DA17 VARCHAR2,
+DA18 VARCHAR2,
+DA19 VARCHAR2,
+DA20 VARCHAR2,
+DA21 VARCHAR2,
+DA22 VARCHAR2,
+DA23 VARCHAR2,
+DA24 VARCHAR2,
+DA25 VARCHAR2,
+DA26 VARCHAR2,
+DA27 VARCHAR2,
+DA28 VARCHAR2,
+DA29 VARCHAR2,
+DA30 VARCHAR2,
+DA31 VARCHAR2,
+DA32 VARCHAR2,
+DA33 VARCHAR2,
+DA34 VARCHAR2,
+DA35 VARCHAR2,
+DA36 VARCHAR2,
+DA37 VARCHAR2,
+DA38 VARCHAR2,
+DA39 VARCHAR2,
+DA40 VARCHAR2,
+DA41 VARCHAR2,
+DA42 VARCHAR2,
+DA43 VARCHAR2,
+DA44 VARCHAR2,
+DA45 VARCHAR2,
+DA46 VARCHAR2,
+DA47 VARCHAR2,
+DA48 VARCHAR2,
+DA49 VARCHAR2,
+DA50 VARCHAR2,
+DA51 VARCHAR2,
+DA52 VARCHAR2,
+DA53 VARCHAR2,
+DA54 VARCHAR2,
+DA55 VARCHAR2,
+DA56 VARCHAR2,
+DA57 VARCHAR2,
+DA58 VARCHAR2,
+DA59 VARCHAR2,
+DA60 VARCHAR2,
+DA61 VARCHAR2,
+DA62 VARCHAR2,
+DA63 VARCHAR2,
+DA64 VARCHAR2,
+DA65 VARCHAR2,
+DA66 VARCHAR2,
+DA67 VARCHAR2,
+DA68 VARCHAR2,
+DA69 VARCHAR2,
+DA70 VARCHAR2,
+DA71 VARCHAR2,
+DA72 VARCHAR2,
+DA73 VARCHAR2,
+DA74 VARCHAR2,
+DA75 VARCHAR2,
+DA76 VARCHAR2,
+DA77 VARCHAR2,
+DA78 VARCHAR2,
+DA79 VARCHAR2,
+DA80 VARCHAR2,
+DA81 VARCHAR2,
+DA82 VARCHAR2,
+DA83 VARCHAR2,
+DA84 VARCHAR2,
+DA85 VARCHAR2,
+DA86 VARCHAR2,
+DA87 VARCHAR2,
+DA88 VARCHAR2,
+RI ROWID
+) IS
+BEGIN
+   IF C1 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C1||'='||''''||TRIM(REPLACE(DA1,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C2 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C2||'='||''''||TRIM(REPLACE(DA2,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C3 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C3||'='||''''||TRIM(REPLACE(DA3,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C4 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C4||'='||''''||TRIM(REPLACE(DA4,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C5 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C5||'='||''''||TRIM(REPLACE(DA5,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C6 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C6||'='||''''||TRIM(REPLACE(DA6,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C7 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C7||'='||''''||TRIM(REPLACE(DA7,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C8 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C8||'='||''''||TRIM(REPLACE(DA8,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C9 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C9||'='||''''||TRIM(REPLACE(DA9,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C10 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C10||'='||''''||TRIM(REPLACE(DA10,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C11 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C11||'='||''''||TRIM(REPLACE(DA11,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C12 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C12||'='||''''||TRIM(REPLACE(DA12,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C13 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C13||'='||''''||TRIM(REPLACE(DA13,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C14 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C14||'='||''''||TRIM(REPLACE(DA14,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C15 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C15||'='||''''||TRIM(REPLACE(DA15,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C16 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C16||'='||''''||TRIM(REPLACE(DA16,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C17 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C17||'='||''''||TRIM(REPLACE(DA17,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C18 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C18||'='||''''||TRIM(REPLACE(DA18,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C19 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C19||'='||''''||TRIM(REPLACE(DA19,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C20 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C20||'='||''''||TRIM(REPLACE(DA20,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C21 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C21||'='||''''||TRIM(REPLACE(DA21,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C22 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C22||'='||''''||TRIM(REPLACE(DA22,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C23 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C23||'='||''''||TRIM(REPLACE(DA23,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C24 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C24||'='||''''||TRIM(REPLACE(DA24,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C25 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C25||'='||''''||TRIM(REPLACE(DA25,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C26 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C26||'='||''''||TRIM(REPLACE(DA26,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C27 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C27||'='||''''||TRIM(REPLACE(DA27,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C28 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C28||'='||''''||TRIM(REPLACE(DA28,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C29 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C29||'='||''''||TRIM(REPLACE(DA29,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C30 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C30||'='||''''||TRIM(REPLACE(DA30,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C31 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C31||'='||''''||TRIM(REPLACE(DA31,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C32 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C32||'='||''''||TRIM(REPLACE(DA32,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C33 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C33||'='||''''||TRIM(REPLACE(DA33,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C34 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C34||'='||''''||TRIM(REPLACE(DA34,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C35 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C35||'='||''''||TRIM(REPLACE(DA35,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C36 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C36||'='||''''||TRIM(REPLACE(DA36,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C37 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C37||'='||''''||TRIM(REPLACE(DA37,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C38 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C38||'='||''''||TRIM(REPLACE(DA38,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C39 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C39||'='||''''||TRIM(REPLACE(DA39,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C40 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C40||'='||''''||TRIM(REPLACE(DA40,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C41 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C41||'='||''''||TRIM(REPLACE(DA41,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C42 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C42||'='||''''||TRIM(REPLACE(DA42,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C43 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C43||'='||''''||TRIM(REPLACE(DA43,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C44 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C44||'='||''''||TRIM(REPLACE(DA44,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C45 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C45||'='||''''||TRIM(REPLACE(DA45,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C46 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C46||'='||''''||TRIM(REPLACE(DA46,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C47 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C47||'='||''''||TRIM(REPLACE(DA47,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C48 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C48||'='||''''||TRIM(REPLACE(DA48,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C49 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C49||'='||''''||TRIM(REPLACE(DA49,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C50 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C50||'='||''''||TRIM(REPLACE(DA50,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C51 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C51||'='||''''||TRIM(REPLACE(DA51,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C52 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C52||'='||''''||TRIM(REPLACE(DA52,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C53 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C53||'='||''''||TRIM(REPLACE(DA53,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C54 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C54||'='||''''||TRIM(REPLACE(DA54,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C55 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C55||'='||''''||TRIM(REPLACE(DA55,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C56 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C56||'='||''''||TRIM(REPLACE(DA56,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C57 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C57||'='||''''||TRIM(REPLACE(DA57,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C58 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C58||'='||''''||TRIM(REPLACE(DA58,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C59 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C59||'='||''''||TRIM(REPLACE(DA59,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C60 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C60||'='||''''||TRIM(REPLACE(DA60,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C61 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C61||'='||''''||TRIM(REPLACE(DA61,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C62 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C62||'='||''''||TRIM(REPLACE(DA62,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C63 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C63||'='||''''||TRIM(REPLACE(DA63,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C64 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C64||'='||''''||TRIM(REPLACE(DA64,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C65 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C65||'='||''''||TRIM(REPLACE(DA65,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C66 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C66||'='||''''||TRIM(REPLACE(DA66,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C67 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C67||'='||''''||TRIM(REPLACE(DA67,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C68 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C68||'='||''''||TRIM(REPLACE(DA68,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C69 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C69||'='||''''||TRIM(REPLACE(DA69,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C70 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C70||'='||''''||TRIM(REPLACE(DA70,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C71 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C71||'='||''''||TRIM(REPLACE(DA71,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C72 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C72||'='||''''||TRIM(REPLACE(DA72,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C73 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C73||'='||''''||TRIM(REPLACE(DA73,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C74 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C74||'='||''''||TRIM(REPLACE(DA74,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C75 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C75||'='||''''||TRIM(REPLACE(DA75,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C76 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C76||'='||''''||TRIM(REPLACE(DA76,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C77 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C77||'='||''''||TRIM(REPLACE(DA77,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C78 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C78||'='||''''||TRIM(REPLACE(DA78,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C79 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C79||'='||''''||TRIM(REPLACE(DA79,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C80 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C80||'='||''''||TRIM(REPLACE(DA80,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C81 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C81||'='||''''||TRIM(REPLACE(DA81,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C82 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C82||'='||''''||TRIM(REPLACE(DA82,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C83 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C83||'='||''''||TRIM(REPLACE(DA83,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C84 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C84||'='||''''||TRIM(REPLACE(DA84,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C85 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C85||'='||''''||TRIM(REPLACE(DA85,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C86 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C86||'='||''''||TRIM(REPLACE(DA86,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C87 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C87||'='||''''||TRIM(REPLACE(DA87,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   IF C88 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C88||'='||''''||TRIM(REPLACE(DA88,CHR(13),0))||''''||'WHERE ROWID='||''''||RI||''''; END IF;
+   COMMIT;
+END;
+
+
+
+
+
+
+BEGIN
+
+   FOR THRD_P_PRE_STG_R IN THRD_PRE_STG_CUR LOOP
+
+	PN:=THRD_P_PRE_STG_R.PARTY_NAME;
+	FN:=THRD_P_PRE_STG_R.FILE_NAME;
+
+	IF THRD_P_PRE_STG_R.ATTRIBUTE1 LIKE 'S' THEN
+		  OPEN THRD_P_MAP_CUR(PN);
+		  FETCH THRD_P_MAP_CUR  INTO IMAP;
+		  P_ASSIGN(IMAP);
+		  D_ASSIGN(THRD_P_PRE_STG_R);
+		  IF C1 IS NOT NULL THEN
+		  INSERT INTO xx_THIRD_PARTY_STAGING(PARTY_NAME,ROW_SEQUENCE,FILE_NAME) VALUES (PN,xx_THRD_PRTY_SEQ.NEXTVAL,FN);
+		  SELECT xx_THRD_PRTY_SEQ.CURRVAL INTO I FROM DUAL;
+		  SELECT MAX(ROWID) INTO RI FROM xx_THIRD_PARTY_STAGING WHERE PARTY_NAME = PN AND ROW_SEQUENCE=I;
+		  END IF;
+		  P_UPDATE(
+		  D1,D2,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D16,D17,D18,D19,D20,D21,D22,D23,D24,D25,D26,D27,D28,D29,D30,D31,D32,D33,D34,D35,D36,
+		  D37,D38,D39,D40,D41,D42,D43,D44,D45,D46,D47,D48,D49,D50,D51,D52,D53,D54,D55,D56,D57,D58,D59,D60,D61,D62,D63,D64,D65,D66,D67,D68,D69,D70,
+		  D71,D72,D73,D74,D75,D76,D77,D78,D79,D80,D81,D82,D83,D84,D85,D86,D87,D88,RI);
+		  CLOSE THRD_P_MAP_CUR;
+
+	ELSE
+
+				SELECT LINE_TYPE INTO HSYM  FROM xx_THIRD_PARTY_MAPPING  WHERE PARTY_NAME = PN AND HL_SYMBOL = THRD_P_PRE_STG_R.COLUMN1;
+
+		IF HSYM LIKE '%H%' THEN
+
+			 OPEN THRD_P_MAP_CUR(PN,'H');
+			 FETCH THRD_P_MAP_CUR  INTO IMAP ;
+			 P_ASSIGN(IMAP);
+			 D_ASSIGN(THRD_P_PRE_STG_R);
+			     	 INSERT INTO xx_THIRD_PARTY_STAGING(PARTY_NAME,ROW_SEQUENCE,FILE_NAME) VALUES (PN,xx_THRD_PRTY_SEQ.NEXTVAL,FN);
+					 SELECT xx_THRD_PRTY_SEQ.CURRVAL INTO I FROM DUAL;
+					 SELECT MAX(ROWID) INTO RI FROM xx_THIRD_PARTY_STAGING WHERE PARTY_NAME = PN AND ROW_SEQUENCE=I;
+					 P_UPDATE(
+					 D1,D2,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D16,D17,D18,D19,D20,D21,D22,D23,D24,D25,D26,D27,D28,D29,D30,D31,D32,D33,D34,D35,D36,D37,
+					 D38,D39,D40,D41,D42,D43,D44,D45,D46,D47,D48,D49,D50,D51,D52,D53,D54,D55,D56,D57,D58,D59,D60,D61,D62,D63,D64,D65,D66,D67,D68,D69,D70,D71,D72,
+					 D73,D74,D75,D76,D77,D78,D79,D80,D81,D82,D83,D84,D85,D86,D87,D88,RI);
+					 H_BKUP(THRD_P_PRE_STG_R);
+					 LC:=0;
+					 DBMS_OUTPUT.PUT_LINE('HEADER LC IS '||LC);
+			  CLOSE THRD_P_MAP_CUR;
+
+
+
+		ELSIF HSYM LIKE '%L%' THEN
+
+			IF LC>=1 THEN
+				OPEN THRD_P_MAP_CUR(PN,'H');
+					FETCH THRD_P_MAP_CUR  INTO IMAP ;
+					INSERT INTO xx_THIRD_PARTY_STAGING(PARTY_NAME,ROW_SEQUENCE,FILE_NAME) VALUES (PN,xx_THRD_PRTY_SEQ.NEXTVAL,FN);
+					SELECT xx_THRD_PRTY_SEQ.CURRVAL INTO I FROM DUAL;
+					SELECT MAX(ROWID) INTO RI FROM xx_THIRD_PARTY_STAGING WHERE PARTY_NAME = PN AND ROW_SEQUENCE=I;
+					P_ASSIGN(IMAP);
+					D_ASSIGN(THRD_P_PRE_STG_R);
+					P_UPDATE(BD1,BD2,BD3,BD4,BD5,BD6,BD7,BD8,BD9,BD10,BD11,BD12,BD13,BD14,BD15,BD16,BD17,BD18,BD19,BD20,BD21,
+					BD22,BD23,BD24,BD25,BD26,BD27,BD28,BD29,BD30,BD31,BD32,BD33,BD34,BD35,BD36,BD37,BD38,BD39,BD40,BD41,BD42,
+					BD43,BD44,BD45,BD46,BD47,BD48,BD49,BD50,BD51,BD52,BD53,BD54,BD55,BD56,BD57,BD58,BD59,BD60,BD61,BD62,BD63,
+					BD64,BD65,BD66,BD67,BD68,BD69,BD70,BD71,BD72,BD73,BD74,BD75,BD76,BD77,BD78,BD79,BD80,BD81,BD82,BD83,BD84,BD85,BD86,BD87,BD88,RI);
+					DBMS_OUTPUT.PUT_LINE('CONDIGIONT TRUE'||LC);
+				CLOSE THRD_P_MAP_CUR;
+			END IF;
+
+			OPEN THRD_P_MAP_CUR(THRD_P_PRE_STG_R.PARTY_NAME,'L');
+			FETCH THRD_P_MAP_CUR  INTO IMAP ;
+			P_ASSIGN(IMAP);
+			D_ASSIGN(THRD_P_PRE_STG_R);
+
+			P_UPDATE
+			(D1,D2,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D16,D17,D18,D19,D20,D21,D22,D23,D24,D25,D26,D27,D28,D29,D30,D31,D32,D33,D34,D35,
+			 D36,D37,D38,D39,D40,D41,D42,D43,D44,D45,D46,D47,D48,D49,D50,D51,D52,D53,D54,D55,D56,D57,D58,D59,D60,D61,D62,D63,D64,D65,D66,D67,D68,D69,
+			 D70,D71,D72,D73,D74,D75,D76,D77,D78,D79,D80,D81,D82,D83,D84,D85,D86,D87,D88,RI
+			 );
+
+			LC:=LC+1;
+			CLOSE THRD_P_MAP_CUR;
+
+
+
+
+
+	---------------------------------------------
+
+
+
+		ELSIF HSYM LIKE '%M%' or HSYM LIKE '%C%' THEN
+			  IF HSYM LIKE '%M%' THEN
+			   OPEN THRD_P_MAP_CUR(PN,'M');
+			   FETCH THRD_P_MAP_CUR  INTO IMAP ;
+			   P_ASSIGN(IMAP);
+			   D_ASSIGN(THRD_P_PRE_STG_R);
+			   CLOSE THRD_P_MAP_CUR;
+
+			  ELSIF HSYM LIKE '%C%' THEN
+			   OPEN THRD_P_MAP_CUR(PN,'C');
+			   FETCH THRD_P_MAP_CUR  INTO IMAP ;
+			   P_ASSIGN(IMAP);
+			   D_ASSIGN(THRD_P_PRE_STG_R);
+			   CLOSE THRD_P_MAP_CUR;
+
+			   ELSE
+			   DBMS_OUTPUT.PUT_lINE('INVALID HEADER SYMBOL '||HSYM);
+			   END IF;
+
+			   SELECT MAX(ROW_SEQUENCE) INTO RL FROM xx_THIRD_PARTY_STAGING WHERE PARTY_NAME LIKE PN;
+			   SELECT ORDER_IDENTIFIER INTO OI FROM xx_THIRD_PARTY_STAGING WHERE ROW_SEQUENCE = RL;
+
+			   DBMS_OUTPUT.PUT_LINE('ROWID'||RL);
+			   DBMS_OUTPUT.PUT_LINE('OI '||OI);
+			   DBMS_OUTPUT.PUT_lINE('COLUMN1 '||C1);
+			   DBMS_OUTPUT.PUT_lINE('DATA1 '||D1);
+
+			   -----------------------------------------------------------------------------
+			   select ROWID INTO RI FROM xx_THIRD_PARTY_STAGING WHERE ROW_SEQUENCE=RL;
+
+			    P_UPDATE(
+					 D1,D2,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D16,D17,D18,D19,D20,D21,D22,D23,D24,D25,D26,D27,D28,D29,D30,D31,D32,D33,D34,D35,D36,D37,
+					 D38,D39,D40,D41,D42,D43,D44,D45,D46,D47,D48,D49,D50,D51,D52,D53,D54,D55,D56,D57,D58,D59,D60,D61,D62,D63,D64,D65,D66,D67,D68,D69,D70,D71,D72,
+					 D73,D74,D75,D76,D77,D78,D79,D80,D81,D82,D83,D84,D85,D86,D87,D88,RI);
+			   -----------------------------------------------------------------------------------
+			   --IF U WANT C AND M DATA GET UPDATED FOR EVERRY ORDER THEN USE BELOW ELSE USE ABOVE
+----------------------------------------------------------------------------------------------------------
+			 /*  IF C1 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C1||'='||''''||TRIM(REPLACE(D1,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C2 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C2||'='||''''||TRIM(REPLACE(D2,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C3 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C3||'='||''''||TRIM(REPLACE(D3,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C4 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C4||'='||''''||TRIM(REPLACE(D4,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C5 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C5||'='||''''||TRIM(REPLACE(D5,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C6 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C6||'='||''''||TRIM(REPLACE(D6,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C7 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C7||'='||''''||TRIM(REPLACE(D7,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C8 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C8||'='||''''||TRIM(REPLACE(D8,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C9 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C9||'='||''''||TRIM(REPLACE(D9,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C10 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C10||'='||''''||TRIM(REPLACE(D10,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C11 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C11||'='||''''||TRIM(REPLACE(D11,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C12 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C12||'='||''''||TRIM(REPLACE(D12,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C13 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C13||'='||''''||TRIM(REPLACE(D13,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C14 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C14||'='||''''||TRIM(REPLACE(D14,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C15 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C15||'='||''''||TRIM(REPLACE(D15,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C16 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C16||'='||''''||TRIM(REPLACE(D16,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C17 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C17||'='||''''||TRIM(REPLACE(D17,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C18 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C18||'='||''''||TRIM(REPLACE(D18,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C19 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C19||'='||''''||TRIM(REPLACE(D19,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C20 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C20||'='||''''||TRIM(REPLACE(D20,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C21 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C21||'='||''''||TRIM(REPLACE(D21,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C22 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C22||'='||''''||TRIM(REPLACE(D22,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C23 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C23||'='||''''||TRIM(REPLACE(D23,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C24 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C24||'='||''''||TRIM(REPLACE(D24,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C25 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C25||'='||''''||TRIM(REPLACE(D25,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C26 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C26||'='||''''||TRIM(REPLACE(D26,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C27 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C27||'='||''''||TRIM(REPLACE(D27,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C28 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C28||'='||''''||TRIM(REPLACE(D28,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C29 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C29||'='||''''||TRIM(REPLACE(D29,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C30 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C30||'='||''''||TRIM(REPLACE(D30,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C31 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C31||'='||''''||TRIM(REPLACE(D31,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C32 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C32||'='||''''||TRIM(REPLACE(D32,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C33 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C33||'='||''''||TRIM(REPLACE(D33,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C34 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C34||'='||''''||TRIM(REPLACE(D34,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C35 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C35||'='||''''||TRIM(REPLACE(D35,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C36 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C36||'='||''''||TRIM(REPLACE(D36,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C37 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C37||'='||''''||TRIM(REPLACE(D37,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C38 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C38||'='||''''||TRIM(REPLACE(D38,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C39 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C39||'='||''''||TRIM(REPLACE(D39,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C40 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C40||'='||''''||TRIM(REPLACE(D40,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C41 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C41||'='||''''||TRIM(REPLACE(D41,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C42 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C42||'='||''''||TRIM(REPLACE(D42,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C43 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C43||'='||''''||TRIM(REPLACE(D43,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C44 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C44||'='||''''||TRIM(REPLACE(D44,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C45 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C45||'='||''''||TRIM(REPLACE(D45,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C46 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C46||'='||''''||TRIM(REPLACE(D46,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C47 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C47||'='||''''||TRIM(REPLACE(D47,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C48 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C48||'='||''''||TRIM(REPLACE(D48,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C49 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C49||'='||''''||TRIM(REPLACE(D49,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C50 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C50||'='||''''||TRIM(REPLACE(D50,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C51 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C51||'='||''''||TRIM(REPLACE(D51,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C52 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C52||'='||''''||TRIM(REPLACE(D52,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C53 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C53||'='||''''||TRIM(REPLACE(D53,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C54 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C54||'='||''''||TRIM(REPLACE(D54,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C55 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C55||'='||''''||TRIM(REPLACE(D55,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C56 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C56||'='||''''||TRIM(REPLACE(D56,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C57 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C57||'='||''''||TRIM(REPLACE(D57,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C58 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C58||'='||''''||TRIM(REPLACE(D58,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C59 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C59||'='||''''||TRIM(REPLACE(D59,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C60 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C60||'='||''''||TRIM(REPLACE(D60,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C61 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C61||'='||''''||TRIM(REPLACE(D61,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C62 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C62||'='||''''||TRIM(REPLACE(D62,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C63 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C63||'='||''''||TRIM(REPLACE(D63,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C64 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C64||'='||''''||TRIM(REPLACE(D64,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C65 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C65||'='||''''||TRIM(REPLACE(D65,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C66 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C66||'='||''''||TRIM(REPLACE(D66,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C67 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C67||'='||''''||TRIM(REPLACE(D67,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C68 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C68||'='||''''||TRIM(REPLACE(D68,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C69 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C69||'='||''''||TRIM(REPLACE(D69,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C70 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C70||'='||''''||TRIM(REPLACE(D70,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C71 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C71||'='||''''||TRIM(REPLACE(D71,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C72 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C72||'='||''''||TRIM(REPLACE(D72,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C73 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C73||'='||''''||TRIM(REPLACE(D73,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C74 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C74||'='||''''||TRIM(REPLACE(D74,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C75 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C75||'='||''''||TRIM(REPLACE(D75,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C76 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C76||'='||''''||TRIM(REPLACE(D76,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C77 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C77||'='||''''||TRIM(REPLACE(D77,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C78 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C78||'='||''''||TRIM(REPLACE(D78,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C79 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C79||'='||''''||TRIM(REPLACE(D79,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C80 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C80||'='||''''||TRIM(REPLACE(D80,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C81 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C81||'='||''''||TRIM(REPLACE(D81,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C82 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C82||'='||''''||TRIM(REPLACE(D82,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C83 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C83||'='||''''||TRIM(REPLACE(D83,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C84 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C84||'='||''''||TRIM(REPLACE(D84,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C85 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C85||'='||''''||TRIM(REPLACE(D85,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C86 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C86||'='||''''||TRIM(REPLACE(D86,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C87 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C87||'='||''''||TRIM(REPLACE(D87,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;
+			   IF C88 IS NOT NULL THEN    EXECUTE IMMEDIATE 'UPDATE xx_THIRD_PARTY_STAGING SET '||C88||'='||''''||TRIM(REPLACE(D88,CHR(13),0))||''''||'WHERE ORDER_IDENTIFIER='||''''||OI||''''; END IF;*/
+	-------------------------------------------------------------------------------------------------------------
+		ELSE NULL;
+		END IF;
+	END IF;
+    END LOOP;
+	COMMIT;
+MISC_MAP;
+xx_ORDER_CREATION_VALIDATIONS (ERRBUF ,RETCODE );
+END xx_THIRD_PARTY_MAPPING_PROC;
+
+
+
+
+------------------------------------------------------------------------------------------------------------------
+--start of procedure  xx_READ_FILE9
+--------------------------------------------------------------------------------------------------------------------
+
+
+
+
+PROCEDURE xx_READ_FILE(ERRBUF VARCHAR2,RETCODE VARCHAR2,PATH in VARCHAR2,FILENAME in VARCHAR2,PARTY_NAME VARCHAR2)
+IS
+
+ F UTL_FILE.FILE_TYPE;
+    S VARCHAR2(4000);
+    C NUMBER := 0;
+    V_STRING   VARCHAR2(4000);
+    HD VARCHAR2(5);
+  PN VARCHAR2(250);
+ CURSOR EB(PPARTY_NAME VARCHAR2) IS SELECT * FROM xx_THIRD_PARTY_MAPPING WHERE UPPER(PARTY_NAME) LIKE UPPER (PPARTY_NAME);
+ CURSOR EBHL(PPARTY_NAME VARCHAR2,LI_TYPE VARCHAR2) IS SELECT * FROM xx_THIRD_PARTY_MAPPING WHERE UPPER(PARTY_NAME) LIKE UPPER (PPARTY_NAME) AND UPPER(HL_SYMBOL) LIKE UPPER(LI_TYPE);
+  EREC_EM EB%ROWTYPE;
+ EREC_HL EBHL%ROWTYPE;
+  SYMB VARCHAR2(250);
+  DEL VARCHAR2(250);
+  ENCL VARCHAR2(250);
+  LT VARCHAR2(250);
+  HL_SYMB VARCHAR2(250);
+BEGIN
+
+FND_GLOBAL.APPS_INITIALIZE(
+USER_ID=>FND_GLOBAL.USER_ID,
+RESP_ID=>FND_GLOBAL.RESP_ID,
+RESP_APPL_ID=>FND_GLOBAL.RESP_APPL_ID,
+SECURITY_GROUP_ID=>FND_GLOBAL.SECURITY_GROUP_ID
+);
+--FND_FILE.PUT_LINE(fnd_file.OUTPUT,'hi');
+
+PN:=PARTY_NAME;
+
+
+   DBMS_OUTPUT.PUT_LINE('PARTY NAME:'||PN);
+   OPEN EB(PN);
+   --IF EB%NOTFOUND THEN
+   --DBMS_OUTPUT.PUT_LINE('THE PARTY NAME HAS NOT BEEN MAPPED WITH MAPPING TABLE');
+   FETCH EB INTO EREC_EM;
+
+
+
+             IF EREC_EM.DELIMITER_TYPE LIKE '%DEL%' THEN
+
+                  F := UTL_FILE.FOPEN(PATH,FILENAME,'R');
+                  LOOP
+                  S:=NULL;
+                  UTL_FILE.GET_LINE(F,S);
+                  V_STRING:=S;
+                  DEL:=EREC_EM.DELIMITER;
+                  ENCL:=EREC_EM.ENCLOSURE;
+				  LT:=EREC_EM.LINE_TYPE;
+                  xx_READ_DELIMITED(PN,V_STRING,C,DEL,ENCL,LT,FILENAME);
+                  END LOOP;
+
+
+              ELSIF
+                  EREC_EM.DELIMITER_TYPE LIKE '%FIX%' THEN
+		          F := UTL_FILE.FOPEN(PATH,FILENAME,'R');
+                  LOOP
+
+                  S:=NULL;
+                  UTL_FILE.GET_LINE(F,S);
+				   V_STRING:=S;
+
+
+				   IF EREC_EM.LINE_TYPE  !='S' THEN
+				   	  SELECT SUBSTR(S,1,1) INTO HL_SYMB FROM DUAL;
+					   OPEN EBHL(PN,HL_SYMB);
+					   fetch ebhl into erec_hl;
+					     xx_READ_CONCATENATED(PN,V_STRING,EREC_HL,C,FILENAME);
+	                 CLOSE EBHL;
+
+					 else
+					   xx_READ_CONCATENATED(PN,V_STRING,EREC_EM,C,FILENAME);
+					   END IF;
+
+
+		          END LOOP;
+              ELSIF
+                  EREC_EM.DELIMITER_TYPE LIKE '%TAB%' THEN
+                  xx_READ_TAB(PN,FILENAME,PATH,EREC_EM);
+			   ELSE
+			   NULL;
+              END IF;
+
+
+
+
+
+
+
+DBMS_OUTPUT.PUT_LINE('BACK INTO THE MAIN ' );
+
+ EXCEPTION
+     WHEN NO_DATA_FOUND THEN
+        UTL_FILE.FCLOSE(F);
+        DBMS_OUTPUT.PUT_LINE('NO. OF ROWS INSERTED : ' || C);
+		FND_FILE.PUT_LINE(FND_FILE.LOG,'PARTY NAME : ' || PN);
+		FND_FILE.PUT_LINE(FND_FILE.LOG,'NO. OF ROWS INSERTED : ' || C);
+
+		commit;
+  WHEN OTHERS THEN
+  NULL;
+DBMS_OUTPUT.PUT_LINE(SQLERRM);
+FND_FILE.PUT_LINE(FND_FILE.LOG,SQLERRM);
+
+
+
+END xx_READ_FILE;
+
+--END OF LOADER
+
+PROCEDURE xx_ORDER_CREATION_VALIDATIONS (ERRBUF VARCHAR2,RETCODE VARCHAR2)
+IS
+-- =================================================================================================================
+-- Procedure Name: xx_ORDER_CREATION_VALIDATIONS
+-- Purpose: To Check existing Or New Customer, For New customer create Customer
+--  		 For Existing Customer If site is not present then create new site
+-- Code Added On 21-AUG-2023   Prakash Raut
+-- ==================================================================================================================
+
+CURSOR C IS
+SELECT a.rowid,a.*
+FROM xx_third_party_staging a
+WHERE 1=1
+AND process_flag is null
+ORDER BY party_name,order_identifier,order_item_identifier;
+
+p_item_tax   		NUMBER:=0;
+p_shipping_price	NUMBER:=0;
+p_shipping_tax		NUMBER:=0;
+
+BEGIN
+p_user_id	:=1133;
+p_org_id 	:= 83;
+DBMS_OUTPUT.PUT_LINE('TEST1'); -- ADDED FOR TESTING
+
+SELECT count(a.rowid)
+INTO p_total_count
+FROM xx_third_party_staging a
+WHERE 1=1
+AND process_flag is null;
+
+
+FOR REC IN C
+LOOP
+p_error_message 		:=NULL;
+p_parent_customer_ref :=NULL;
+p_ship_customer_ref	:=NULL;
+p_ship_customer_ref1	:=NULL;
+p_ship_customer_ref2	:=NULL;
+p_first_name		:=NULL;
+p_last_name		:=NULL;
+p_ship_first_name	:=NULL;
+p_ship_last_name		:=NULL;
+
+BEGIN
+SELECT TO_NUMBER(rec.item_number)
+INTO p_item_number
+FROM DUAL;
+EXCEPTION
+WHEN OTHERS THEN
+p_item_number :=rec.item_number;
+END;
+
+fnd_file.Put_line(fnd_file.LOG,'Start Of Order Processing '||rec.party_name||' For Order  '||rec.order_identifier||' Item '||p_item_number);
+
+BEGIN
+fnd_file.Put_line(fnd_file.LOG,'Start Of Validations');
+------------------------------------------------------------------------------------
+-----Validation for the Party Name-----------
+/*BEGIN
+	SELECT trim(SUBSTR(trim(rec.buyer_full_name),1,INSTR(trim(rec.buyer_full_name),' '))),
+	trim(SUBSTR(trim(rec.buyer_full_name),INSTR(trim(rec.buyer_full_name),' ')+1)) ,
+ 	trim(SUBSTR(trim(rec.ship_to_name),1,INSTR(trim(rec.ship_to_name),' '))),
+	trim(SUBSTR(trim(rec.ship_to_name),INSTR(trim(rec.ship_to_name),' ')+1))
+	INTO p_first_name,p_last_name,p_ship_first_name,p_ship_last_name
+	FROM dual;
+
+IF rec.buyer_full_name IS NULL AND   (rec.buyer_first_name is not null) AND(rec.buyer_last_name is not null) THEN
+	p_first_name :=rec.buyer_first_name;
+	p_last_name :=rec.buyer_last_name;
+END IF;
+
+IF rec.ship_to_name is NULL THEN
+rec.ship_to_name :=p_first_name||' '||p_last_name;
+END IF;
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+
+	fnd_file.Put_line(fnd_file.LOG,'1 : Party First Name and Last Name No Data Found ');
+	p_error_message :=p_error_message||'1 Party First Name and Last Name No Data Found ';
+WHEN OTHERS THEN
+	fnd_file.Put_line(fnd_file.LOG,'1 : Party First Name and Last Name Others '||SQLCODE||'	'||SQLERRM);
+	p_error_message :=p_error_message||' Party First Name and Last Name Others '||SQLCODE||'	'||substr(SQLERRM,1.240);
+END;
+*/
+
+SELECT trim(SUBSTR(trim(rec.ship_to_name),1,INSTR(trim(rec.ship_to_name),' '))),
+	  trim(SUBSTR(trim(rec.ship_to_name),INSTR(trim(rec.ship_to_name),' ')+1))
+INTO  p_ship_first_name,p_ship_last_name
+FROM dual;
+
+--------Validation of Order Identifier--------------
+IF rec.order_identifier IS NULL THEN
+	fnd_file.Put_line(fnd_file.LOG,'2 : Order Identifier Should not be Null ');
+	p_error_message := p_error_message||'2 : Order Identifier Should not be Null ';
+END IF;
+
+--------Validation of Item Code---------------
+BEGIN
+	SELECT DISTINCT(inventory_item_id)
+	INTO p_inventory_item_id
+	FROM mtl_system_items_b msi,
+		mtl_parameters mp
+	WHERE msi.segment1 = p_item_number
+	    and  msi.organization_id = mp.organization_id
+	    and  msi.organization_id = mp.MASTER_ORGANIZATION_ID;
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+	fnd_file.Put_line(fnd_file.LOG,'2A : Item Code Data Not Found '||rec.ITEM_NUMBER);
+WHEN OTHERS THEN
+	fnd_file.Put_line(fnd_file.LOG,'2A : Item Code in Others '||rec.ITEM_NUMBER||' '||SQLCODE||'	'||SQLERRM);
+	p_error_message :=p_error_message||'2A Item Code in Others '||SQLCODE||'	'||substr(SQLERRM,1.240);
+END;
+
+---------Validation of Order Qty Should not be Zero---------------------
+IF rec.ordered_quantity = 0 THEN
+	fnd_file.Put_line(fnd_file.LOG,'3 : Order Order Qty Should not be Zero ');
+	p_error_message := p_error_message||' 3 : Order Order Qty Should not be Zero ';
+END IF;
+
+---------------------------------------------------------------------------------------
+DBMS_OUTPUT.PUT_LINE('TEST1.1'); -- ADDED FOR TESTING
+
+IF rec.order_identifier ='Sales Record Number' THEN
+--GOTO skipping;
+p_error_message :='Not Valid Order' ;
+END IF;
+
+--IF rec.buyer_full_name is NULL Then
+
+--UPDATE xx_third_party_staging
+--SET ERROR_MESSAGE='Customer Name is null', process_flag='E'
+--WHERE order_identifier = rec.order_identifier;
+--DBMS_OUTPUT.PUT_LINE('TEST1.2'); -- ADDED FOR TESTING
+
+--ELSE
+
+IF p_error_message is NOT NULL THEN
+	UPDATE xx_third_party_staging a
+	SET a.error_message= p_error_message, a.process_flag='E'
+	WHERE a.order_identifier=rec.order_identifier;
+	p_error_count :=p_error_count+1;
+	COMMIT; 			-- COMMENTED FOR TESTING
+--	retcode :=1;
+--	GOTO skipping;
+END IF;
+end;
+END LOOP;
+--ELSE
+p_order_identifier1 :=0;
+p_order_identifier2 :=0;
+
+FOR REC IN C
+LOOP
+BEGIN
+p_line_type :=NULL;
+
+SELECT name
+INTO p_org_name
+FROM hr_operating_units
+WHERE 1=1
+AND organization_id= p_org_id;
+
+IF p_org_name='xx Corporation dba Zipzoomfly' THEN
+IF rec.party_name ='SHOP.COM' THEN
+p_line_type:='H';
+END IF;
+
+SELECT zzf_order_type
+INTO p_order_type
+from xx_third_party_mapping
+WHERE 1=1
+AND line_type=NVL(p_line_type,line_type)
+AND party_name=rec.party_name; --'SHOP.COM'
+
+ELSE
+IF rec.party_name ='SHOP.COM' THEN
+p_line_type:='H';
+END IF;
+
+SELECT wp_order_type
+INTO p_order_type
+from xx_third_party_mapping
+WHERE 1=1
+AND line_type=NVL(p_line_type,line_type)
+AND party_name=rec.party_name;
+END IF;
+--p_line_number :=1;
+p_order_identifier1 := rec.order_identifier;
+
+IF rec.shipping_method_name is NULL THEN
+	p_shipping_method_code :='000001_fdeEx_L_FXG';
+ELSE
+BEGIN
+	SELECT lookup_code
+	INTO p_shipping_method_code
+	FROM fnd_lookup_values FV
+	WHERE 1=1
+	AND fv.lookup_type = 'SHIP_METHOD'
+	AND fv.lookup_type LIKE 'SHIP_METHOD'
+	AND fv.enabled_flag='Y'
+	AND fv.meaning = rec.shipping_method_name ;--'FedEx Ground'
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+	p_shipping_method_code :='000001_fdeEx_L_FXG';
+END;
+END IF;
+DBMS_OUTPUT.PUT_LINE('TEST1.3 '||p_order_identifier1||' | '||p_order_identifier2); -- ADDED FOR TESTING
+DBMS_OUTPUT.PUT_LINE('TEST1.3.1 Shipping Method '||rec.shipping_method_name||' | '||p_shipping_method_code); -- ADDED FOR TESTING
+	fnd_file.Put_line(fnd_file.LOG,'Order identifier1 '||p_order_identifier1||' Order identifier2 '||p_order_identifier2||' Shipping Method '||rec.shipping_method_name||' || '||p_shipping_method_code);
+
+BEGIN
+SELECT count(*)
+INTO v_count
+FROM hz_parties hp
+WHERE 1=1
+AND upper(party_name)=upper(rec.party_name);
+--AND UPPER(hp.person_first_name) = UPPER(NVL(p_first_name,rec.buyer_first_name))
+--AND UPPER(hp.person_last_name) = UPPER(NVL(p_last_name,rec.buyer_last_name));
+
+DBMS_OUTPUT.PUT_LINE('TEST1.4  count '||v_count); -- ADDED FOR TESTING
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+ fnd_file.Put_line(fnd_file.LOG,'TEST1.0 The Customer Not Found '||rec.party_name);
+END;
+
+
+IF v_count =0 THEN
+ fnd_file.Put_line(fnd_file.LOG,'TEST1.0 The Customer Not Found '||rec.party_name);
+
+ -------------------------------------------------------------------------------
+
+ NULL;
+ ELSE
+
+ DBMS_OUTPUT.PUT_LINE('TEST1.5');
+ fnd_file.Put_line(fnd_file.LOG,'TEST1');
+ p_sold_to_org_id		:=NULL;
+ p_ship_to_org_id		:=NULL;
+ p_customer_number	:=NULL;
+ p_customer_number1	:=NULL;
+ p_cust_acct_site_id	:=NULL;
+ p_cust_account_id	:=NULL;
+ p_invoice_to_org_id	:=NULL;
+
+
+ BEGIN
+    fnd_file.Put_line(fnd_file.LOG,'TEST1.1 party_name '||rec.party_name||' Ship to address line1 '||rec.ship_to_address_line1||' Ship to city '||rec.ship_to_city||' Ship to state '||rec.ship_to_state);
+
+ SELECT  	hca.cust_account_id sold_to_org_id,hcsua.site_use_id ship_to_org_id, NVL(hcsua.price_list_id,hca.price_list_id) price_list_id,hca.account_number customer_number,hcasa.cust_acct_site_id,hcsua.site_use_id invoice_to_org_id
+ INTO  	p_sold_to_org_id,p_ship_to_org_id,p_price_list_id,p_customer_number,p_cust_acct_site_id,p_invoice_to_org_id
+ FROM hz_cust_site_uses_all hcsua,
+      	hz_cust_acct_sites_all hcasa,
+      	hz_cust_accounts hca,
+      	hz_party_sites hps,
+ 	hz_parties hp,
+ 	hz_locations hl
+ WHERE 1=1
+ AND hcsua.site_use_code = 'SHIP_TO'
+ AND hcsua.status = 'A'
+ AND hcsua.cust_acct_site_id = hcasa.cust_acct_site_id
+ AND hcasa.cust_account_id = hca.cust_account_id
+ AND hcasa.party_site_id = hps.party_site_id
+ AND hp.party_id=hps.party_id
+ AND hl.location_id= hps.location_id
+ AND upper(hl.address1||hl.city||hl.state) = upper(rec.ship_to_address_line1||rec.ship_to_city||rec.ship_to_state)
+ AND upper(hp.party_name)= upper(rec.party_name) ;
+
+DBMS_OUTPUT.PUT_LINE('TEST1.6');
+
+   fnd_file.Put_line(fnd_file.LOG,'TEST1.1.1 p_sold_to_org_id '||p_sold_to_org_id||' p_ship_to_org_id '||p_ship_to_org_id||' p_cust_acct_site_id '||p_cust_acct_site_id||' p_invoice_to_org_id '||p_invoice_to_org_id);
+
+SELECT  	hcasa.cust_acct_site_id,hcsua.site_use_id invoice_to_org_id
+ INTO  	p_cust_acct_site_id,p_invoice_to_org_id
+ FROM hz_cust_site_uses_all hcsua,
+      	hz_cust_acct_sites_all hcasa,
+      	hz_cust_accounts hca,
+      	hz_party_sites hps,
+ 	hz_parties hp,
+ 	hz_locations hl
+ WHERE 1=1
+ AND hcsua.site_use_code = 'BILL_TO'
+ AND hcsua.status = 'A'
+ AND hcsua.cust_acct_site_id = hcasa.cust_acct_site_id
+ AND hcasa.cust_account_id = hca.cust_account_id
+ AND hcasa.party_site_id = hps.party_site_id
+ AND hp.party_id=hps.party_id
+ AND hl.location_id= hps.location_id
+ AND upper(hp.party_name)= upper(rec.party_name) ;
+
+   fnd_file.Put_line(fnd_file.LOG,'TEST1.1.2 p_cust_acct_site_id '||p_cust_acct_site_id||' p_invoice_to_org_id '||p_invoice_to_org_id);
+DBMS_OUTPUT.PUT_LINE('TEST1.7');
+
+ fnd_file.Put_line(fnd_file.LOG,'TEST1.1.3 '||p_invoice_to_org_id);
+
+ EXCEPTION
+ WHEN NO_DATA_FOUND THEN
+   fnd_file.Put_line(fnd_file.LOG,'TEST1.2 ');
+   DBMS_OUTPUT.PUT_LINE('TEST1.8');
+
+ SELECT  	distinct hca.cust_account_id sold_to_org_id,hca.cust_account_id,hca.account_number
+  INTO  	p_sold_to_org_id,p_cust_account_id,p_customer_number1
+  FROM hz_cust_site_uses_all hcsua,
+       	hz_cust_acct_sites_all hcasa,
+       	hz_cust_accounts hca,
+       	hz_party_sites hps,
+  	hz_parties hp,
+  	hz_locations hl
+  WHERE 1=1
+  AND hcsua.site_use_code = 'BILL_TO'
+  AND hcsua.status = 'A'
+  AND hcsua.cust_acct_site_id = hcasa.cust_acct_site_id
+  AND hcasa.cust_account_id = hca.cust_account_id
+  AND hcasa.party_site_id = hps.party_site_id
+  AND hp.party_id=hps.party_id
+  AND hl.location_id= hps.location_id
+  --AND upper(hl.address1||hl.city||hl.state) = upper(rec.ship_to_address_line1||rec.ship_to_city||rec.ship_to_state)
+  AND UPPER(hp.party_name)= UPPER(rec.party_name) ;
+ END;
+
+ BEGIN
+   SELECT hcsua.site_use_id invoice_to_org_id
+    INTO   p_invoice_ship_to_org_id
+    FROM hz_cust_site_uses_all hcsua
+    WHERE 1=1
+    AND hcsua.site_use_code = 'SHIP_TO'
+    AND hcsua.cust_acct_site_id = p_cust_acct_site_id;
+ EXCEPTION
+ 	WHEN NO_DATA_FOUND THEN
+ 	NULL;
+ END;
+
+  fnd_file.Put_line(fnd_file.LOG,'TEST2 '||'Sold to org id '||p_sold_to_org_id||' p_ship_to_org_id '||p_ship_to_org_id||' p_customer_number '||NVL(p_customer_number,p_customer_number1)||' p_cust_acct_site_id '||p_cust_acct_site_id||' p_invoice_to_org_id '||p_invoice_to_org_id||' p_cust_account_id '||p_cust_account_id||' p_customer_number1 '||p_customer_number1);
+
+ 	SELECT xx_THRD_PRTY_SEQ.NEXTVAL
+    	INTO p_ship_customer_ref
+	From dual;
+
+ IF p_customer_number1 is NOT NULL THEN
+  fnd_file.Put_line(fnd_file.LOG,'TEST3 Inserting Data Into oe_customer_info_iface_all');
+DBMS_OUTPUT.PUT_LINE('TEST1.9 Inserting Data Into oe_customer_info_iface_all');
+
+ INSERT INTO OE_CUSTOMER_INFO_IFACE_ALL
+ (CUSTOMER_INFO_REF,
+  CURRENT_CUSTOMER_ID,
+  CUSTOMER_TYPE,
+  CUSTOMER_INFO_TYPE_CODE,
+  PARENT_CUSTOMER_REF,
+  ORGANIZATION_NAME,
+  PERSON_FIRST_NAME,
+  PERSON_LAST_NAME,
+  EMAIL_ADDRESS,
+  PHONE_NUMBER,
+  COUNTRY,
+  ADDRESS1,
+  ADDRESS2,
+  ADDRESS3,
+  CITY,
+  POSTAL_CODE,
+  STATE,
+  PROVINCE,
+  COUNTY,
+  IS_SHIP_TO_ADDRESS,
+  ORG_ID,
+  ATTRIBUTE1,
+--  ATTRIBUTE2,
+  CREATED_BY,
+  CREATION_DATE,
+  LAST_UPDATED_BY,
+  LAST_UPDATE_DATE,
+  LAST_UPDATE_LOGIN
+ )
+ VALUES
+ (p_ship_customer_ref,				-- CUSTOMER_INFO_REF
+  p_cust_account_id,				-- CURRENT_CUSTOMER_ID
+  'ORGANIZATION',				-- CUSTOMER_TYPE
+  'ADDRESS'	,					-- CUSTOMER_INFO_TYPE_CODE
+  NULL,						-- PARENT_CUSTOMER_REF
+  NULL, 						-- ORGANIZATION_NAME
+  p_ship_first_name,				-- PERSON_FIRST_NAME
+  p_ship_last_name,				-- PERSON_LAST_NAME
+  NULL,						-- EMAIL_ADDRESS
+  rec.ship_to_phone_number,			--  PHONE_NUMBER
+  NVL(rec.ship_to_country,'US'),		-- COUNTRY
+  rec.ship_to_address_line1,			-- ADDRESS1
+  rec.ship_to_address_line2,			-- ADDRESS2
+  rec.ship_to_address_line3,			-- ADDRESS3
+  rec.ship_to_city,				-- CITY
+  rec.ship_to_postal_code,			-- POSTAL_CODE
+  rec.ship_to_state,				-- STATE
+  NULL,						-- PROVINCE
+  NULL,						-- COUNTY
+  'Y',							-- IS_SHIP_TO_ADDRESS
+  p_org_id,						-- ORG_ID
+  p_ship_first_name||' '||p_ship_last_name,	-- ATTRIBUTE1
+  --p_ship_last_name,				-- ATTRIBUTE2
+  p_user_id, 					-- CREATED_BY
+  sysdate, 						-- CREATION_DATE
+  p_user_id,					-- LAST_UPDATED_BY
+  sysdate,						-- LAST_UPDATE_DATE
+  p_login_id						-- LAST_UPDATE_LOGIN
+);
+
+ 	SELECT xx_THRD_PRTY_SEQ.NEXTVAL
+    	INTO p_ship_customer_ref1
+	From dual;
+
+
+ INSERT INTO OE_CUSTOMER_INFO_IFACE_ALL
+ (CUSTOMER_INFO_REF,
+  CURRENT_CUSTOMER_ID,
+  CUSTOMER_TYPE,
+  CUSTOMER_INFO_TYPE_CODE,
+ -- PARENT_CUSTOMER_REF,
+  ORGANIZATION_NAME,
+  PERSON_FIRST_NAME,
+  PERSON_LAST_NAME,
+  EMAIL_ADDRESS,
+  PHONE_NUMBER,
+  --COUNTRY,
+  --ADDRESS1,
+  --ADDRESS2,
+  --ADDRESS3,
+  --CITY,
+  --POSTAL_CODE,
+  --STATE,
+  --PROVINCE,
+  --COUNTY,
+ -- IS_SHIP_TO_ADDRESS,
+  ORG_ID,
+  CREATED_BY,
+  CREATION_DATE,
+  LAST_UPDATED_BY,
+  LAST_UPDATE_DATE,
+  LAST_UPDATE_LOGIN
+ )
+ VALUES
+ (p_ship_customer_ref1,			-- CUSTOMER_INFO_REF
+  p_cust_account_id,				-- CURRENT_CUSTOMER_ID
+  'ORGANIZATION',				-- CUSTOMER_TYPE
+  'CONTACT',					-- CUSTOMER_INFO_TYPE_CODE
+ -- p_ship_customer_ref,				-- PARENT_CUSTOMER_REF
+  NULL, 						-- ORGANIZATION_NAME
+  p_ship_first_name,				-- PERSON_FIRST_NAME
+  p_ship_last_name,				-- PERSON_LAST_NAME
+  NULL,						-- EMAIL_ADDRESS
+  rec.ship_to_phone_number,			--  PHONE_NUMBER
+ -- NVL(rec.ship_to_country,'US'),		-- COUNTRY
+ -- rec.ship_to_address_line1,		-- ADDRESS1
+ -- rec.ship_to_address_line2,		-- ADDRESS2
+ -- rec.ship_to_address_line3,		-- ADDRESS3
+ -- rec.ship_to_city,				-- CITY
+ -- rec.ship_to_postal_code,			-- POSTAL_CODE
+ -- rec.ship_to_state,				-- STATE
+ -- NULL,						-- PROVINCE
+ -- NULL,						-- COUNTY
+ -- 'Y',						-- IS_SHIP_TO_ADDRESS
+  p_org_id,						-- ORG_ID
+  p_user_id, 					-- CREATED_BY
+  sysdate, 						-- CREATION_DATE
+  p_user_id,					-- LAST_UPDATED_BY
+  sysdate,						-- LAST_UPDATE_DATE
+  p_login_id						-- LAST_UPDATE_LOGIN
+);
+
+ SELECT order_source_id
+ INTO   p_source_id
+ FROM oe_order_sources
+ WHERE UPPER(NAME) = UPPER('Third Party Orders');
+
+ SELECT 'XTPO'||xx_THRD_PRTY_SEQ.NEXTVAL
+ INTO p_orig_sys_document_ref
+ FROM DUAL;
+
+ DBMS_OUTPUT.PUT_LINE('TEST4.1 p_sold_to_org_id '||p_sold_to_org_id||' p_ship_to_org_id '||p_ship_to_org_id||' p_invoice_to_org_id '||p_invoice_to_org_id ||' p_price_list_id '||p_price_list_id ||' p_customer_number '||NVL(p_customer_number,p_customer_number1) ); -- ADDED FOR TESTING
+
+-- IF p_order_identifier1 <> p_order_identifier2 THEN
+-- p_line_number:=1;
+fnd_file.Put_line(fnd_file.LOG,'TEST4 Inserting Data Into oe_headers_iface_all');
+
+ Insert into OE_HEADERS_IFACE_ALL
+ (ORDER_SOURCE_ID,
+  ORIG_SYS_DOCUMENT_REF,
+  ORG_ID,
+  ORDERED_DATE,
+  ORDER_TYPE,
+ -- PRICE_LIST_ID,
+  SOLD_TO_ORG_ID,
+  SOLD_FROM_ORG_ID,
+  SHIP_FROM_ORG_ID,
+--  SHIP_TO_ORG_ID,
+--  INVOICE_TO_ORG_ID,
+--  CUSTOMER_NUMBER,
+  BOOKED_FLAG,
+  CREATED_BY,
+  CREATION_DATE,
+  LAST_UPDATED_BY,
+  LAST_UPDATE_DATE,
+  LAST_UPDATE_LOGIN,
+--  ORIG_SYS_CUSTOMER_REF,
+  ORIG_SHIP_ADDRESS_REF,
+  TRANSACTIONAL_CURR_CODE,
+  CONVERSION_RATE,
+  SHIPPING_METHOD_CODE,
+  SALESREP_ID,
+  OPERATION_CODE,
+  PAYMENT_TERM,
+  CUSTOMER_PO_NUMBER,
+  SHIP_TO_CONTACT_REF
+ )
+  Values
+   (p_source_id, 					-- ORDER_SOURCE_ID
+   rec.order_identifier,  		 		-- ORIG_SYS_DOCUMENT_REF
+   p_org_id, 					-- ORG_ID
+   sysdate ,						-- ORDERED_DATE  to_date(rec.ordered_date,'YYYY/MM/DD')
+  NVL(p_order_type, 'xx Third Party Orders'), 			-- ORDER_TYPE
+ --  p_price_list_id, 				-- PRICE_LIST_ID
+   p_sold_to_org_id, 				-- SOLD_TO_ORG_ID
+   p_org_id, 					--  SOLD_FROM_ORG_ID
+   p_org_id,						--  SHIP_FROM_ORG_ID
+--   p_ship_to_org_id,				--  SHIP_TO_ORG_ID
+--   p_invoice_to_org_id,			--  INVOICE_TO_ORG_ID
+--   p_customer_number, 			-- CUSTOMER_NUMBER
+   'Y', 						--  BOOKED_FLAG
+   p_user_id, 					-- CREATED_BY
+   sysdate, 						-- CREATION_DATE
+   p_user_id,					-- LAST_UPDATED_BY
+   sysdate,						-- LAST_UPDATE_DATE
+   p_login_id,					-- LAST_UPDATE_LOGIN
+--   p_parent_customer_ref,			-- ORIG_SYS_CUSTOMER_REF
+   p_ship_customer_ref,				-- ORIG_SHIP_ADDRESS_REF
+--   p_ship_customer_ref1,			-- SHIP_TO_CONTACT_REF
+   rec.currency_used,				-- TRANSACTIONAL_CURR_CODE
+   rec.exchange_rate,				-- CONVERSION_RATE
+   p_shipping_method_code,			-- SHIPPING_METHOD_CODE
+   -3 ,						-- SALESREP_ID
+   'INSERT',						-- OPERATION_CODE
+   'IMMEDIATE',					-- PAYMENT_TERM
+   'XTPO'||xx_THRD_PRTY_SEQ.NEXTVAL,   -- CUSTOMER_PO_NUMBER
+   p_ship_customer_ref1			-- SHIP_TO_CONTACT_REF
+  );
+
+  GOTO SKIIPING;
+ END IF;
+  IF p_order_identifier1 <> p_order_identifier2 THEN
+  p_line_number:=1;
+ fnd_file.Put_line(fnd_file.LOG,'TEST4.1 Inserting Data Into oe_headers_iface_all');
+
+DBMS_OUTPUT.PUT_LINE('TEST1.10 Inserting Data Into oe_headers_iface_all ');
+
+  Insert into OE_HEADERS_IFACE_ALL
+  (ORDER_SOURCE_ID,
+   ORIG_SYS_DOCUMENT_REF,
+   ORG_ID,
+   ORDERED_DATE,
+   ORDER_TYPE,
+  -- PRICE_LIST_ID,
+   SOLD_TO_ORG_ID,
+   SOLD_FROM_ORG_ID,
+   SHIP_TO_ORG_ID,
+   INVOICE_TO_ORG_ID,
+ --  CUSTOMER_NUMBER,
+   BOOKED_FLAG,
+   CREATED_BY,
+   CREATION_DATE,
+   LAST_UPDATED_BY,
+   LAST_UPDATE_DATE,
+   LAST_UPDATE_LOGIN,
+ --  ORIG_SYS_CUSTOMER_REF,
+--   ORIG_SHIP_ADDRESS_REF,
+   TRANSACTIONAL_CURR_CODE,
+   CONVERSION_RATE,
+   SHIPPING_METHOD_CODE,
+   SALESREP_ID,
+   OPERATION_CODE,
+   PAYMENT_TERM,
+   CUSTOMER_PO_NUMBER
+ --  SHIP_TO_CONTACT_REF
+  )
+   Values
+    (p_source_id, 					-- ORDER_SOURCE_ID
+    rec.order_identifier,  			-- ORIG_SYS_DOCUMENT_REF
+    p_org_id, 					-- ORG_ID
+    sysdate ,					-- ORDERED_DATE  to_date(rec.ordered_date,'YYYY/MM/DD')
+  NVL(p_order_type, 'xx Third Party Orders'), 			-- ORDER_TYPE
+  --  p_price_list_id, 				-- PRICE_LIST_ID
+    p_sold_to_org_id, 				-- SOLD_TO_ORG_ID
+    p_org_id, 					--  SOLD_FROM_ORG_ID
+    p_ship_to_org_id,				--  SHIP_TO_ORG_ID
+   p_invoice_to_org_id,				--  INVOICE_TO_ORG_ID
+ --   p_customer_number, 			-- CUSTOMER_NUMBER
+    'Y', 						--  BOOKED_FLAG
+    p_user_id, 					-- CREATED_BY
+    sysdate, 						-- CREATION_DATE
+    p_user_id,					-- LAST_UPDATED_BY
+    sysdate,						-- LAST_UPDATE_DATE
+    p_login_id,					-- LAST_UPDATE_LOGIN
+ --   p_parent_customer_ref,			-- ORIG_SYS_CUSTOMER_REF
+--    p_ship_customer_ref,			-- ORIG_SHIP_ADDRESS_REF
+    rec.currency_used,				-- TRANSACTIONAL_CURR_CODE
+    rec.exchange_rate,				-- CONVERSION_RATE
+    p_shipping_method_code,			-- SHIPPING_METHOD_CODE
+    -3 ,						-- SALESREP_ID
+    'INSERT',						-- OPERATION_CODE
+    'IMMEDIATE',					-- PAYMENT_TERM
+    'XTPO'||xx_THRD_PRTY_SEQ.NEXTVAL   -- CUSTOMER_PO_NUMBER
+ --   p_ship_customer_ref				-- SHIP_TO_CONTACT_REF
+   );
+
+ ELSE
+ p_line_number :=p_line_number+1;
+ END IF;
+<<SKIIPING>>
+ -- ---------------------------- Inserting Data Into OE_LINES_IFACE_ALL Table ----------------------
+ SELECT  'XTPOLINE'||xx_THRD_PRTY_SEQ.NEXTVAL
+ INTO p_orig_sys_line_ref
+ FROM DUAL;
+ fnd_file.Put_line(fnd_file.LOG,'TEST4.2 Item '||rec.item_number);
+ DBMS_OUTPUT.PUT_LINE('TEST4.2 Item '||rec.item_number);
+ BEGIN
+
+ SELECT TO_NUMBER(rec.item_number)
+ INTO p_item_number
+ FROM DUAL;
+ EXCEPTION
+ WHEN OTHERS THEN
+ p_item_number :=rec.item_number;
+ END;
+
+ SELECT distinct(inventory_item_id)
+ INTO p_inventory_item_id
+ FROM mtl_system_items_b
+ WHERE 1=1
+ AND segment1= rec.item_number;
+
+ DBMS_OUTPUT.PUT_LINE('TEST5.1'); -- ADDED FOR TESTING
+ fnd_file.Put_line(fnd_file.LOG,'TEST4.3');
+ IF rec.item_price LIKE '%$%' THEN
+-- SELECT substr(rec.item_price,instr(rec.item_price,'$')+1),substr(rec.total_amount,instr(rec.total_amount,'$')+1)
+-- INTO p_item_price,p_total_amount
+-- FROM dual;
+ SELECT substr(rec.item_price,instr(rec.item_price,'$')+1),substr(rec.total_amount,instr(rec.total_amount,'$')+1),substr(rec.item_tax,instr(rec.item_tax,'$')+1),substr(rec.shipping_price,instr(rec.shipping_price,'$')+1),substr(rec.shipping_tax,instr(rec.shipping_tax,'$')+1)
+ INTO p_item_price,p_total_amount,p_item_tax,p_shipping_price,p_shipping_tax
+ FROM dual;
+ ELSE
+ 	p_item_price 	:= rec.item_price;
+ --	p_total_amount 	:= rec.total_amount;
+ 	p_item_tax 	:= rec.item_tax;
+ 	p_shipping_price 	:= rec.shipping_price;
+ 	p_shipping_tax   	:= rec.shipping_tax;
+
+ END IF;
+fnd_file.Put_line(fnd_file.LOG,'TEST5 Inserting Data Into oe_lines_iface_all'||' p_item_price '||p_item_price||' p_total_amount '||p_total_amount||' p_item_tax '||p_item_tax ||' p_shipping_price '||p_shipping_price||' p_shipping_tax '||p_shipping_tax);
+DBMS_OUTPUT.PUT_LINE('TEST1.11 Inserting Data Into oe_lines_iface_all ');
+
+/* Insert into OE_LINES_IFACE_ALL
+ (ORDER_SOURCE_ID,
+  ORIG_SYS_DOCUMENT_REF,
+  ORIG_SYS_LINE_REF,
+  ORG_ID,
+  LINE_NUMBER,
+--  LINE_TYPE,
+  INVENTORY_ITEM,
+  SCHEDULE_SHIP_DATE,
+  SCHEDULE_ARRIVAL_DATE,
+  PROMISE_DATE,
+  ORDERED_QUANTITY,
+  INVOICE_TO_ORG_ID,
+ -- PRICE_LIST_ID,
+  UNIT_SELLING_PRICE,
+  TAX_EXEMPT_FLAG,
+  SHIPMENT_PRIORITY_CODE,
+  SHIPPING_METHOD_CODE,
+--  FREIGHT_TERMS_CODE,
+  CALCULATE_PRICE_FLAG,
+  UNIT_LIST_PRICE,
+--  CLOSED_FLAG,
+  SOLD_TO_ORG_ID,
+  OPERATION_CODE,
+--  TAX_CODE,
+--  TAX_DATE,
+ -- ATTRIBUTE1, 		--TAX_VALUE,
+  CREATED_BY,
+  CREATION_DATE,
+  LAST_UPDATED_BY,
+  LAST_UPDATE_DATE,
+  LAST_UPDATE_LOGIN
+  )
+  Values
+    (p_source_id, 						-- ORDER_SOURCE_ID,
+    rec.order_identifier,					-- ORIG_SYS_DOCUMENT_REF
+    p_orig_sys_line_ref, 					-- ORIG_SYS_LINE_REF
+    p_org_id, 						-- ORG_ID
+    p_line_number,					-- LINE_NUMBER
+--    'ZZF Standard (Line Invoicing)', 		-- LINE_TYPE			*************
+    rec.item_number,					-- INVENTORY_ITEM ID	  ***************
+    sysdate, 						-- SCHEDULE_SHIP_DATE
+    sysdate, 						-- SCHEDULE_ARRIVAL_DATE
+    sysdate, 						-- PROMISE_DATE
+    rec.ordered_quantity,				-- ORDERED_QUANTITY
+    p_invoice_to_org_id,					-- INVOICE_TO_ORG_ID
+ --   p_price_list_id,					-- PRICE_LIST_ID
+    p_item_price,						-- UNIT_SELLING_PRICE
+    'R', 							-- TAX_EXEMPT_FLAG
+    'Standard',						-- SHIPMENT_PRIORITY_CODE   *************
+     p_shipping_method_code,				-- SHIPPING_METHOD_CODE     ***********
+ --   'Paid',							-- FREIGHT_TERMS_CODE	   **************
+    'P',  							-- CALCULATE_PRICE_FLAG
+    p_item_price,						--  UNIT_LIST_PRICE
+--    'N', 							-- CLOSED_FLAG
+    p_sold_to_org_id, 					-- SOLD_TO_ORG_ID
+    'INSERT', 						-- OPERATION_CODE
+   -- 'STANDARD',						-- TAX_CODE,
+   -- sysdate,						-- TAX_DATE
+  --  p_item_tax,						-- TAX_VALUE
+    p_user_id,						-- CREATED_BY
+    sysdate,							-- CREATION_DATE
+    p_user_id, 						-- LAST_UPDATED_BY
+    sysdate,							-- LAST_UPDATE_DATE
+    -1								-- LAST_UPDATE_LOGIN
+    );
+*/
+
+ Insert into OE_LINES_IFACE_ALL
+ (ORDER_SOURCE_ID,
+  ORIG_SYS_DOCUMENT_REF,
+  ORIG_SYS_LINE_REF,
+  ORG_ID,
+  LINE_NUMBER,
+--  LINE_TYPE,
+  INVENTORY_ITEM,
+  SCHEDULE_SHIP_DATE,
+  SCHEDULE_ARRIVAL_DATE,
+  PROMISE_DATE,
+  ORDERED_QUANTITY,
+  INVOICE_TO_ORG_ID,
+ -- PRICE_LIST_ID,
+  UNIT_SELLING_PRICE,
+  TAX_EXEMPT_FLAG,
+  SHIPMENT_PRIORITY_CODE,
+  SHIPPING_METHOD_CODE,
+--  FREIGHT_TERMS_CODE,
+  CALCULATE_PRICE_FLAG,
+  UNIT_LIST_PRICE,
+  ATTRIBUTE1,
+  ATTRIBUTE2,
+--  CLOSED_FLAG,
+  CREATED_BY,
+  CREATION_DATE,
+  LAST_UPDATED_BY,
+  LAST_UPDATE_DATE,
+  LAST_UPDATE_LOGIN
+  )
+  Values
+    (p_source_id, 						-- ORDER_SOURCE_ID,
+    rec.order_identifier,					-- ORIG_SYS_DOCUMENT_REF
+    p_orig_sys_line_ref, 					-- ORIG_SYS_LINE_REF
+    p_org_id, 						-- ORG_ID
+    p_line_number,					-- LINE_NUMBER
+--    'ZZF Standard (Line Invoicing)', 		-- LINE_TYPE			*************
+    rec.item_number,					-- INVENTORY_ITEM ID	  ***************
+    sysdate, 						-- SCHEDULE_SHIP_DATE
+    sysdate, 						-- SCHEDULE_ARRIVAL_DATE
+    sysdate, 						-- PROMISE_DATE
+    rec.ordered_quantity,				-- ORDERED_QUANTITY
+    p_invoice_to_org_id,					-- INVOICE_TO_ORG_ID
+ --   p_price_list_id,					-- PRICE_LIST_ID
+    p_item_price,						-- UNIT_SELLING_PRICE
+    'S', 							-- TAX_EXEMPT_FLAG
+    'Standard',						-- SHIPMENT_PRIORITY_CODE   *************
+     p_shipping_method_code,				-- SHIPPING_METHOD_CODE     ***********
+ --   'Paid',							-- FREIGHT_TERMS_CODE	   **************
+    'P',  							-- CALCULATE_PRICE_FLAG
+   p_item_price,						--  UNIT_LIST_PRICE
+   rec.item_tax,						-- ATTRIBUTE1 (Third Party Item Tax)
+   rec.order_item_identifier, 				-- ATTRIBUTE2 (Order Item identifier)
+--    'N', 							-- CLOSED_FLAG
+    p_user_id,						-- CREATED_BY
+    sysdate,							-- CREATION_DATE
+    p_user_id, 						-- LAST_UPDATED_BY
+    sysdate,							-- LAST_UPDATE_DATE
+    -1								-- LAST_UPDATE_LOGIN
+    );
+
+     fnd_file.Put_line(fnd_file.LOG,'TEST3 Inserting Data Into oe_price_adjs_iface_all p_shipping_price'||p_shipping_price||' Shipping Cost '||rec.shipping_cost||' Shipping Tax '||p_shipping_tax);
+    dbms_output.put_line ('TEST3 Inserting Data Into oe_price_adjs_iface_all p_shipping_price'||p_shipping_price||' Shipping Cost '||rec.shipping_cost||' Shipping Tax '||p_shipping_tax);
+
+ Insert into OE_PRICE_ADJS_IFACE_ALL
+ (ORDER_SOURCE_ID,
+ ORIG_SYS_DOCUMENT_REF,
+ ORIG_SYS_DISCOUNT_REF,
+ ORG_ID,
+ CREATION_DATE,
+ CREATED_BY,
+ LAST_UPDATE_DATE,
+ LAST_UPDATED_BY,
+ AUTOMATIC_FLAG,
+ LIST_HEADER_ID,
+ LIST_LINE_ID,
+ LIST_LINE_TYPE_CODE,
+ APPLIED_FLAG,
+ OPERATION_CODE,
+ OPERAND,
+ ARITHMETIC_OPERATOR,
+ ADJUSTED_AMOUNT,
+ CHARGE_TYPE_CODE,
+ SOLD_TO_ORG_ID)
+ Values
+ (p_source_id, 							-- ORDER_SOURCE_ID
+ rec.order_identifier, 						-- ORIG_SYS_DOCUMENT_REF
+ 'XTPODISCREF'||xx_THRD_PRTY_SEQ.NEXTVAL, 	-- ORIG_SYS_DISCOUNT_REF
+ p_org_id,								-- ORG_ID
+ SYSDATE,								-- CREATION_DATE
+ p_user_id,								-- CREATED_BY
+ SYSDATE, 								-- LAST_UPDATE_DATE
+ p_user_id,								-- LAST_UPDATED_BY
+ 'N', 									-- AUTOMATIC_FLAG
+ 8056, 								-- LIST_HEADER_ID
+ 32573, 								-- LIST_LINE_ID
+ 'FREIGHT_CHARGE', 						-- LIST_LINE_TYPE_CODE
+ 'Y', 									-- APPLIED_FLAG
+ 'INSERT', 								-- OPERATION_CODE
+ NVL(NVL(p_shipping_price,rec.shipping_cost),0)+nvl(p_shipping_tax,0), 	-- OPERAND
+ 'LUMPSUM', 							-- ARITHMETIC_OPERATOR
+ NVL(NVL(p_shipping_price,rec.shipping_cost),0)+nvl(p_shipping_tax,0),	-- ADJUSTED_AMOUNT
+ 'FREIGHT', 								-- CHARGE_TYPE_CODE
+ p_sold_to_org_id 						-- SOLD_TO_ORG_ID
+ );
+
+
+END IF;
+
+UPDATE xx_third_party_staging a
+SET process_flag='C'
+WHERE a.rowid=rec.rowid;
+ COMMIT;
+p_success_count := p_success_count+1;
+
+--<<SKIPPING>>
+NULL;
+p_order_identifier2 := rec.order_identifier;
+
+FND_FILE.PUT_LINE(FND_FILE.LOG,'***********************************************');
+EXCEPTION
+WHEN OTHERS THEN
+	fnd_file.Put_line(fnd_file.LOG,SQLCODE||'	'||SQLERRM);
+	DBMS_OUTPUT.PUT_LINE(SQLCODE||'	'||SQLERRM);
+	p_error_count :=p_error_count+1;
+--	retcode :=1;
+END;
+END LOOP;
+COMMIT;
+
+FND_FILE.PUT_LINE(FND_FILE.LOG,'   ');
+FND_FILE.PUT_LINE(FND_FILE.LOG,'Output information For Third Party Order Creation  ....');
+FND_FILE.PUT_LINE(FND_FILE.LOG,'***********************************************');
+FND_FILE.PUT_LINE(FND_FILE.LOG,'Total number of records processed: '||p_total_count);
+FND_FILE.PUT_LINE(FND_FILE.LOG,'Total number of records successfully processed:  '||p_success_count);
+FND_FILE.PUT_LINE(FND_FILE.LOG,'Total number of records errored out:  '||p_error_count);
+FND_FILE.PUT_LINE(FND_FILE.LOG,'***************************************************');
+
+EXCEPTION
+WHEN OTHERS THEN
+	fnd_file.Put_line(fnd_file.LOG,SQLCODE||'	'||SQLERRM);
+--	retcode :=1;
+END xx_ORDER_CREATION_VALIDATIONS;
+
+PROCEDURE xx_DATA_FEED_OUTBOUND(ERRBUF VARCHAR2,RETCODE VARCHAR2,P_N IN VARCHAR2,PATH IN VARCHAR2,Fi_NAME IN VARCHAR2,X_FEED IN VARCHAR2) AS
+/*
+**==============================================================================
+**                                 xx Corp.
+**==============================================================================
+** $Id$
+** $Source$
+** Program Name : xx_DATA_FEED_OUTBOUND
+**
+** Type         : SQL/PLSQL Script
+**
+** Program      : OutBound Program for Order Ready for Pick Release
+**   Strategy
+**
+**
+** Called By Objects :
+**   Name                                Type           Desc of Functionality
+**   xx_third_prty_ordr               Package
+**
+**
+**
+** Called Objects :
+**   Name                                Type                  Desc of Functionality
+**   xx Third Party Outbound Exec       Conc Prog Exec        PL/SQL Stored Procedure
+**
+** History      : DD-MON-YYYY  Name                          Comment
+**                24-SEP-2023  VIBHOOTI BHUSHAN SHUKLA        Final Coding & Data Inserted In To Mapping Table According To Scritp.
+**                24-SEP-2023  VINOD DWIVEDI                  Final Coding & Data Check Up According To Different Conditions .
+**
+** Version Control History:
+** $Log$
+**==============================================================================
+*/
+A VARCHAR2(1000);
+I NUMBER;
+rc NUMBER;
+sql_stmt VARCHAR2(10000);
+PNC VARCHAR2(250):=P_N;
+PATH1 VARCHAR2(200) := PATH;
+Fi_NAME1 VARCHAR2(200) := Fi_NAME;
+PN VARCHAR2(250);
+X_FD VARCHAR2(250) :=X_FEED;
+X_FD1 VARCHAR2(250) ;
+wh VARCHAR2(4000);
+fm VARCHAR2(4000);
+dt VARCHAR2(20);
+de VARCHAR2(20);
+DF VARCHAR2(20);
+HF VARCHAR2(20);
+en VARCHAR2(20);
+l_len NUMBER;
+l1_len NUMBER;
+l_profile varchar2(2000);
+COLUMNSD VARCHAR2(10000):=NULL; /*FOR  CURSOR*/
+COLUMNSD1 VARCHAR2(10000):=NULL;/*FOR HEADER*/
+l_COLUMNSD VARCHAR2(10000):=NULL;/*FOR TABLE*/
+fm1 VARCHAR2(4000):=' FROM xx_THIRD_PARTY_MAPPING WHERE PARTY_NAME LIKE ';
+    TYPE dcur IS REF CURSOR;
+    drec dcur;
+    TYPE L_REC_TYPE IS RECORD(L1 VARCHAR2(240));
+    TYPE L_REC_TBL_TYPE IS TABLE OF L_REC_TYPE INDEX BY BINARY_INTEGER ;
+    X_L_REC_TBL_TYPE L_REC_TBL_TYPE;
+BEGIN
+   PN :=''''||PNC||'''';
+  SELECT column_count,FROM_CLAUSE,WHERE_CLAUSE,DELIMITER_TYPE,DELIMITER,ENCLOSURE,X_FEED,DECISION_FLAG,HEADER_FLAG  INTO rc,fm,wh,dt,de,en,X_FD1,DF,HF FROM xx_third_party_mapping WHERE party_name LIKE PNC AND UPPER(TYPE) LIKE 'OUTBOUND' AND X_FEED LIKE X_FD;
+IF(HF ='Y') THEN
+ IF (X_FD1='PRDT_FEED')   THEN
+ IF (dt='TAB') THEN
+  IF (DF ='Y') THEN
+         FOR I IN 1..rc LOOP
+       A := 'SELECT DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+       EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+       IF i=rc THEN
+	   IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+         COLUMNSD1:=COLUMNSD1||l_profile;
+		 else
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+		 end if;
+         IF(X_L_REC_TBL_TYPE(I).L1 ='QOH') THEN
+              l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+		      SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		      COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	     ELSE
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile;
+				-- SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		        -- COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			  ELSE
+	            l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+		        COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+		      END IF;
+	     END IF;
+      ELSE
+	  IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	   COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+		 else
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+		 end if;
+
+	       IF(X_L_REC_TBL_TYPE(I).L1 ='QOH') THEN
+		      l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||' ||CHR(9)|| ';
+           ELSE
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			   select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			   COLUMNSD:=COLUMNSD||l_profile||',';
+			   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			   l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+			  ELSE
+			  l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+	          COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+               END IF;
+	      END IF ;
+      END IF;
+     END LOOP;
+     sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+    -- dbms_output.put_line('Sql Statement :'||sql_stmt);
+    -- dbms_output.put_line('File Header :'||COLUMNSD1);
+    -- dbms_output.put_line('Data in File  '||l_COLUMNSD);
+   --  dbms_output.put_line('Cursor '||COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+     EXECUTE IMMEDIATE
+	 --  'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id;xx_ON_HAND_QTY(v_org,v_inv,QOH); dbms_output.put_line('||l_COLUMNSD||'); data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);END;';
+      'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id;xx_ON_HAND_QTY(v_org,v_inv,QOH); dbms_output.put_line('||l_COLUMNSD||'); data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+   ELSIF(DF='N') THEN
+        FOR I IN 1..rc LOOP
+         A := 'SELECT  COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+           EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+           IF i=rc THEN
+		       IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+               COLUMNSD1:=COLUMNSD1||l_profile;
+			--   SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		     -- COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			   END IF;
+			  IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+                l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+				COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+		        SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		        COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	         ELSE
+			     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			      select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			      COLUMNSD:=COLUMNSD||l_profile||',';
+			      select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			      l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile;
+				  SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		          COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			    ELSE
+				 COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+				 IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	               l_COLUMNSD := l_COLUMNSD;
+				   COLUMNSD1:=COLUMNSD1;
+				 ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	               l_COLUMNSD := l_COLUMNSD;
+				     COLUMNSD1:=COLUMNSD1;
+				 ELSE
+				   COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+				   l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+				END IF;
+				END IF;
+	       END IF;
+          ELSE
+		       IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	           COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+		 --else
+		 --COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+		      end if;
+
+	          IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+                 l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+				 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+              ELSE
+			       IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			           select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			           COLUMNSD:=COLUMNSD||l_profile||',';
+			           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			           l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+				  ELSE
+			          COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+                  IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	                  l_COLUMNSD := l_COLUMNSD;
+				      COLUMNSD1:=COLUMNSD1;
+				  ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	                 l_COLUMNSD := l_COLUMNSD;
+				     COLUMNSD1:=COLUMNSD1;
+				  ELSE
+				  COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+				  l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+				END IF;
+				END IF;
+	         END IF ;
+         END IF;
+     END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+  -- dbms_output.put_line(COLUMNSD1);
+  -- dbms_output.put_line(COLUMNSD);
+  -- dbms_output.put_line('VIBHOOTI'||l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+      dbms_output.put_line('Sql Stmt '|| sql_stmt);
+	  EXECUTE IMMEDIATE
+	--  'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id; xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file); END;';
+'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id; xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+   END IF;
+/*******************************DELIMITER_TYE ID 'DEL'****************************************************************/
+ELSIF (dt='DEL') THEN
+ IF (DF ='Y') THEN
+   FOR I IN 1..rc LOOP
+   A := 'SELECT  DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+    EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+     IF i=rc THEN
+	        IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+               COLUMNSD1:=COLUMNSD1||l_profile||''||en||'';
+		    ELSE
+		     COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||'';
+		   END IF;
+	       IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+              l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+		      SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		      COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	       ELSE
+	          IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||'''';
+		      ELSE
+	            COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+	            l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+		    END IF;
+	   END IF;
+     ELSE
+	      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	      select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	      IF i = 1 THEN
+		  COLUMNSD1:=COLUMNSD1||''||en||''||l_profile||''||en||''||de||''||en||'';
+		  ELSE
+		  COLUMNSD1:=COLUMNSD1||l_profile||''||en||''||de||''||en||'';
+		  END IF;
+		--  ELSE
+		 -- COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+		  END IF;
+	      IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+		    IF i = 1 THEN
+			COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			ELSE
+			COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	        END IF ;
+	      ELSE
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			   select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			   COLUMNSD:=COLUMNSD||l_profile||',';
+			   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			  -- l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+			   IF i=1 THEN
+			   l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			   ELSE
+			   l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			   END IF;
+			   ELSE
+		       COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+			   IF i = 1 THEN
+			   COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+               l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			   ELSE
+			   COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			   l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	           END IF ;
+			   END IF;
+	      END IF ;
+     END IF;
+   END LOOP;
+     sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+--	  dbms_output.put_line(COLUMNSD1);
+  -- dbms_output.put_line(COLUMNSD);
+  -- dbms_output.put_line('VIBHOOTI'||l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+    EXECUTE IMMEDIATE
+        'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id; xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+ ELSIF(DF ='N') THEN
+        FOR I IN 1..rc LOOP
+      A := 'SELECT DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+      EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+       IF i=rc THEN
+	            IF (X_L_REC_TBL_TYPE(I).L1 like 'fnd_profile.value%') THEN
+	               select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+                   COLUMNSD1:=COLUMNSD1||l_profile;
+			    END IF;
+	            IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+                    l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+		            COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||'';
+		            SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		            COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	            ELSE
+		          IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			          select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			          COLUMNSD:=COLUMNSD||l_profile||',';
+			          select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			          l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||'''';
+					  COLUMNSD1:=COLUMNSD1||l_profile||''||en||'';
+					  SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		              COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			    ELSE
+	                  COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+                      IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	                     l_COLUMNSD := l_COLUMNSD;
+				         COLUMNSD1:=COLUMNSD1;
+			          ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	                     l_COLUMNSD := l_COLUMNSD;
+				         COLUMNSD1:=COLUMNSD1;
+			          ELSE
+			            COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||'';
+	                    l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+			          END IF ;
+			   END IF;
+	     END IF;
+       ELSE
+	      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	          -- COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+			    IF i = 1 THEN
+			    COLUMNSD1:=COLUMNSD1||''||en||''||l_profile||''||en||''||de||''||en||'';
+			   -- l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||l_profile||'||'''||en||''||de||''||en||'''||';
+			    ELSE
+			    COLUMNSD1:=COLUMNSD1||l_profile||''||en||''||de||''||en||'';
+			  --  l_COLUMNSD := l_COLUMNSD||l_profile||'||'''||en||''||de||''||en||'''||';
+	            END IF ;
+		  END IF;
+	         IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+		     IF i = 1 THEN
+			 COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			 l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			 ELSE
+			 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			 l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	         END IF ;
+	      ELSE
+		         IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			           select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			           COLUMNSD:=COLUMNSD||l_profile||',';
+			           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			          IF i=1 THEN
+			           l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			          ELSE
+			           l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			         END IF;
+				  ELSE
+		            COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+			        IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	                l_COLUMNSD := l_COLUMNSD;
+				    COLUMNSD1:=COLUMNSD1;
+			        ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	                l_COLUMNSD := l_COLUMNSD;
+				    COLUMNSD1:=COLUMNSD1;
+			     ELSE
+			       IF i = 1 THEN
+			       COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+                   l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			       ELSE
+			       COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			       l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	              END IF ;
+			    END IF;
+			END IF;
+	     END IF ;
+     END IF;
+   END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+   dbms_output.put_line(COLUMNSD1);
+    dbms_output.put_line(COLUMNSD);
+   dbms_output.put_line(l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+    EXECUTE IMMEDIATE
+       'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id;dbms_output.put_line(''Ritesh ''||v_org||v_inv);xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+   END IF;
+ END IF;
+/* ********************************************************X_FEED IS SHP_CONF*****************************/
+ ELSIF(X_FD1='SHP_CONF') THEN
+ IF (dt='TAB') THEN
+   FOR I IN 1..rc LOOP
+   A := 'SELECT DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+     EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+    IF i=rc THEN
+	     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+         COLUMNSD1:=COLUMNSD1||l_profile;
+		 ELSE
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+		 END IF;
+		     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile;
+			  ELSE
+	            l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+		        COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+		      END IF;
+
+	ELSE
+	    IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	     COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+		 else
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+		 end if;
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			     COLUMNSD:=COLUMNSD||l_profile||',';
+			     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			     l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+			  ELSE
+			     l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+	             COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+              END IF;
+   END IF;
+   END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+   dbms_output.put_line(COLUMNSD1);
+    dbms_output.put_line(COLUMNSD);
+   dbms_output.put_line('VIBHOOTI'||l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+ EXECUTE IMMEDIATE
+      'declare data VARCHAR2(4000);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP   data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+ ELSIF(dt='DEL') THEN
+   FOR I IN 1..rc LOOP
+   A := 'SELECT  DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+    EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+       IF i=rc THEN
+	     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	        select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+            COLUMNSD1:=COLUMNSD1||l_profile||''||en||'';
+		 END IF;
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||'''';
+			  ELSE
+		         COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+		      END IF;
+            ELSE
+	        IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			   IF i =1 THEN
+			   COLUMNSD1:=COLUMNSD1||''||en||''||l_profile||''||en||''||de||''||en||'';
+			   ELSE
+			   COLUMNSD1:=COLUMNSD1||l_profile||''||en||''||de||''||en||'';
+			   END IF;
+		    end if;
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			     COLUMNSD:=COLUMNSD||l_profile||',';
+			     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			  --   l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+				 IF i =1 THEN
+				 l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+				 ELSE
+				  l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+				 END IF;
+			  ELSE
+	             COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+				 IF i = 1 THEN
+			      COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+                  l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			     ELSE
+			      COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			      l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	             END IF ;
+              END IF;
+     END IF;
+   END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+  -- dbms_output.put_line(COLUMNSD);
+  --  dbms_output.put_line(COLUMNSD1);
+  -- dbms_output.put_line(l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+    EXECUTE IMMEDIATE
+     'declare data VARCHAR2(4000);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP   data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+ END IF;
+ END IF;
+ /***************************************************HEADER FLAG NO****************************************************/
+ ELSIF(HF='N') THEN
+  IF (X_FD1='PRDT_FEED')   THEN
+ IF (dt='TAB') THEN
+  IF (DF ='Y') THEN
+         FOR I IN 1..rc LOOP
+       A := 'SELECT DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+       EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+       IF i=rc THEN
+	   IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+         COLUMNSD1:=COLUMNSD1||l_profile;
+		 else
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+		 end if;
+         IF(X_L_REC_TBL_TYPE(I).L1 ='QOH') THEN
+              l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+		      SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		      COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	     ELSE
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile;
+				-- SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		        -- COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			  ELSE
+	            l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+		        COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+		      END IF;
+	     END IF;
+      ELSE
+	  IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	   COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+		 else
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+		 end if;
+
+	       IF(X_L_REC_TBL_TYPE(I).L1 ='QOH') THEN
+		      l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||' ||CHR(9)|| ';
+           ELSE
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			   select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			   COLUMNSD:=COLUMNSD||l_profile||',';
+			   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			   l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+			  ELSE
+			  l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+	          COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+               END IF;
+	      END IF ;
+      END IF;
+     END LOOP;
+     sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+    -- dbms_output.put_line('Sql Statement :'||sql_stmt);
+    -- dbms_output.put_line('File Header :'||COLUMNSD1);
+    -- dbms_output.put_line('Data in File  '||l_COLUMNSD);
+    -- dbms_output.put_line('Cursor '||COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+     EXECUTE IMMEDIATE
+       'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id;xx_ON_HAND_QTY(v_org,v_inv,QOH); dbms_output.put_line('||l_COLUMNSD||'); data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+   ELSIF(DF='N') THEN
+        FOR I IN 1..rc LOOP
+         A := 'SELECT  COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+           EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+           IF i=rc THEN
+		       IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+               COLUMNSD1:=COLUMNSD1||l_profile;
+			--   SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		     -- COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			   END IF;
+			  IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+                l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+				COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+		        SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		        COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	         ELSE
+			     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			      select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			      COLUMNSD:=COLUMNSD||l_profile||',';
+			      select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			      l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile;
+				  SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		          COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			    ELSE
+				 COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+				 IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	               l_COLUMNSD := l_COLUMNSD;
+				   COLUMNSD1:=COLUMNSD1;
+				 ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	               l_COLUMNSD := l_COLUMNSD;
+				     COLUMNSD1:=COLUMNSD1;
+				 ELSE
+				   COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+				   l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+				END IF;
+				END IF;
+	       END IF;
+          ELSE
+		       IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	           COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+		 --else
+		 --COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+		      end if;
+
+	          IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+                 l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+				 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+              ELSE
+			       IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			           select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			           COLUMNSD:=COLUMNSD||l_profile||',';
+			           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			           l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+				  ELSE
+			          COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+                  IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	                  l_COLUMNSD := l_COLUMNSD;
+				      COLUMNSD1:=COLUMNSD1;
+				  ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	                 l_COLUMNSD := l_COLUMNSD;
+				     COLUMNSD1:=COLUMNSD1;
+				  ELSE
+				  COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+				  l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+				END IF;
+				END IF;
+	         END IF ;
+         END IF;
+     END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+   dbms_output.put_line(COLUMNSD1);
+   dbms_output.put_line(COLUMNSD);
+   dbms_output.put_line('VIBHOOTI'||l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+      dbms_output.put_line('Sql Stmt '|| sql_stmt);
+	  EXECUTE IMMEDIATE
+	--  'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||'''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id; xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file); END;';
+'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W'');  FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id; xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+   END IF;
+/*******************************DELIMITER_TYE ID 'DEL'****************************************************************/
+ELSIF (dt='DEL') THEN
+ IF (DF ='Y') THEN
+   FOR I IN 1..rc LOOP
+   A := 'SELECT  DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+    EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+     IF i=rc THEN
+	        IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+               COLUMNSD1:=COLUMNSD1||l_profile||''||en||'';
+		    ELSE
+		     COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||'';
+		   END IF;
+	       IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+              l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+		      SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		      COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	       ELSE
+	          IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||'''';
+		      ELSE
+	            COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+	            l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+		    END IF;
+	   END IF;
+     ELSE
+	      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	      select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	      IF i = 1 THEN
+		  COLUMNSD1:=COLUMNSD1||''||en||''||l_profile||''||en||''||de||''||en||'';
+		  ELSE
+		  COLUMNSD1:=COLUMNSD1||l_profile||''||en||''||de||''||en||'';
+		  END IF;
+		--  ELSE
+		 -- COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+		  END IF;
+	      IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+		    IF i = 1 THEN
+			COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			ELSE
+			COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	        END IF ;
+	      ELSE
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			   select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			   COLUMNSD:=COLUMNSD||l_profile||',';
+			   select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			  -- l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+			   IF i=1 THEN
+			   l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			   ELSE
+			   l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			   END IF;
+			   ELSE
+		       COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+			   IF i = 1 THEN
+			   COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+               l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			   ELSE
+			   COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			   l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	           END IF ;
+			   END IF;
+	      END IF ;
+     END IF;
+   END LOOP;
+     sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+	  dbms_output.put_line(COLUMNSD1);
+   dbms_output.put_line(COLUMNSD);
+   dbms_output.put_line('VIBHOOTI'||l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+    EXECUTE IMMEDIATE
+        'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id; xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+ ELSIF(DF ='N') THEN
+        FOR I IN 1..rc LOOP
+      A := 'SELECT DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+      EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+       IF i=rc THEN
+	            IF (X_L_REC_TBL_TYPE(I).L1 like 'fnd_profile.value%') THEN
+	               select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+                   COLUMNSD1:=COLUMNSD1||l_profile;
+			    END IF;
+	            IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+                    l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+		            COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||'';
+		            SELECT LENGTH(COLUMNSD) INTO l_len FROM dual;
+		            COLUMNSD:=SUBSTR(COLUMNSD,1,l_len-1);
+	            ELSE
+		          IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			          select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			          COLUMNSD:=COLUMNSD||l_profile||',';
+			          select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			          l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||'''';
+					  COLUMNSD1:=COLUMNSD1||l_profile||''||en||'';
+					  SELECT LENGTH(COLUMNSD) INTO l1_len FROM dual;
+   		              COLUMNSD:=SUBSTR(COLUMNSD,1,l1_len-1);
+			    ELSE
+	                  COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+                      IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	                     l_COLUMNSD := l_COLUMNSD;
+				         COLUMNSD1:=COLUMNSD1;
+			          ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	                     l_COLUMNSD := l_COLUMNSD;
+				         COLUMNSD1:=COLUMNSD1;
+			          ELSE
+			            COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||'';
+	                    l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+			          END IF ;
+			   END IF;
+	     END IF;
+       ELSE
+	      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	          -- COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+			    IF i = 1 THEN
+			    COLUMNSD1:=COLUMNSD1||''||en||''||l_profile||''||en||''||de||''||en||'';
+			   -- l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||l_profile||'||'''||en||''||de||''||en||'''||';
+			    ELSE
+			    COLUMNSD1:=COLUMNSD1||l_profile||''||en||''||de||''||en||'';
+			  --  l_COLUMNSD := l_COLUMNSD||l_profile||'||'''||en||''||de||''||en||'''||';
+	            END IF ;
+		  END IF;
+	         IF (X_L_REC_TBL_TYPE(I).L1 = 'QOH') THEN
+		     IF i = 1 THEN
+			 COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			 l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			 ELSE
+			 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			 l_COLUMNSD := l_COLUMNSD||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	         END IF ;
+	      ELSE
+		         IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			           select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			           COLUMNSD:=COLUMNSD||l_profile||',';
+			           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			          IF i=1 THEN
+			           l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			          ELSE
+			           l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+			         END IF;
+				  ELSE
+		            COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+			        IF (X_L_REC_TBL_TYPE(I).L1 = 'INVENTORY_ITEM_ID') THEN
+	                l_COLUMNSD := l_COLUMNSD;
+				    COLUMNSD1:=COLUMNSD1;
+			        ELSIF (X_L_REC_TBL_TYPE(I).L1 = 'ORGANIZATION_ID') THEN
+	                l_COLUMNSD := l_COLUMNSD;
+				    COLUMNSD1:=COLUMNSD1;
+			     ELSE
+			       IF i = 1 THEN
+			       COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+                   l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			       ELSE
+			       COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			       l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	              END IF ;
+			    END IF;
+			END IF;
+	     END IF ;
+     END IF;
+   END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+   dbms_output.put_line(COLUMNSD1);
+    dbms_output.put_line(COLUMNSD);
+   dbms_output.put_line(l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+    EXECUTE IMMEDIATE
+       'declare data VARCHAR2(4000);v_org number;v_inv number;QOH varchar2(100);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); FOR rec IN ('||sql_stmt||') LOOP v_INV:=rec.inventory_item_id;v_org:=rec.organization_id;dbms_output.put_line(''Ritesh ''||v_org||v_inv);xx_ON_HAND_QTY(v_org,v_inv,QOH);  data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+   END IF;
+ END IF;
+/* ********************************************************X_FEED IS SHP_CONF*****************************/
+ ELSIF(X_FD1='SHP_CONF') THEN
+ IF (dt='TAB') THEN
+   FOR I IN 1..rc LOOP
+   A := 'SELECT DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+     EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+    IF i=rc THEN
+	     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+         COLUMNSD1:=COLUMNSD1||l_profile;
+		 ELSE
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1;
+		 END IF;
+		     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile;
+			  ELSE
+	            l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1;
+		        COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+		      END IF;
+
+	ELSE
+	    IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+	     COLUMNSD1:=COLUMNSD1||l_profile||CHR(9);
+		 else
+		 COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||CHR(9);
+		 end if;
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			     COLUMNSD:=COLUMNSD||l_profile||',';
+			     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			     l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||' ||CHR(9)|| ';
+			  ELSE
+			     l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||CHR(9)||';
+	             COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+              END IF;
+   END IF;
+   END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+   dbms_output.put_line(COLUMNSD1);
+    dbms_output.put_line(COLUMNSD);
+   dbms_output.put_line('VIBHOOTI'||l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+ EXECUTE IMMEDIATE
+      'declare data VARCHAR2(4000);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); utl_file.put_line (output_file,'''||COLUMNSD1||''');  utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+ ELSIF(dt='DEL') THEN
+   FOR I IN 1..rc LOOP
+   A := 'SELECT  DISTINCT COLUMN'||i||' '||fm1||''||pn||' AND  UPPER(TYPE) = ''OUTBOUND'' AND UPPER(x_feed) = '''||X_FD||'''';
+    EXECUTE IMMEDIATE A  INTO X_L_REC_TBL_TYPE(I).L1;
+       IF i=rc THEN
+	     IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	        select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+            COLUMNSD1:=COLUMNSD1||l_profile||''||en||'';
+		 END IF;
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile  from dual	;
+				 COLUMNSD:=COLUMNSD||l_profile;
+				 select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||'''';
+			  ELSE
+		         COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1;
+				 l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||'''';
+		      END IF;
+            ELSE
+	        IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+	           select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			   IF i =1 THEN
+			   COLUMNSD1:=COLUMNSD1||''||en||''||l_profile||''||en||''||de||''||en||'';
+			   ELSE
+			   COLUMNSD1:=COLUMNSD1||l_profile||''||en||''||de||''||en||'';
+			   END IF;
+		    end if;
+		      IF (X_L_REC_TBL_TYPE(I).L1 like '##%') THEN
+  			     select SUBSTR(replace(X_L_REC_TBL_TYPE(I).L1,'#$','  '),3) into l_profile from dual	;
+			     COLUMNSD:=COLUMNSD||l_profile||',';
+			     select substr(X_L_REC_TBL_TYPE(I).L1,instr(X_L_REC_TBL_TYPE(I).L1,'#$')+2) into l_profile from dual;
+			  --   l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+				 IF i =1 THEN
+				 l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+				 ELSE
+				  l_COLUMNSD := l_COLUMNSD||'rec.'||l_profile||'||'''||en||''||de||''||en||'''||';
+				 END IF;
+			  ELSE
+	             COLUMNSD:=COLUMNSD||X_L_REC_TBL_TYPE(I).L1||',';
+				 IF i = 1 THEN
+			      COLUMNSD1:=COLUMNSD1||''||en||''||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+                  l_COLUMNSD := l_COLUMNSD||''''||en||'''||'||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+			     ELSE
+			      COLUMNSD1:=COLUMNSD1||X_L_REC_TBL_TYPE(I).L1||''||en||''||de||''||en||'';
+			      l_COLUMNSD := l_COLUMNSD||'rec.'||X_L_REC_TBL_TYPE(I).L1||'||'''||en||''||de||''||en||'''||';
+	             END IF ;
+              END IF;
+     END IF;
+   END LOOP;
+   sql_stmt := 'select '||columnsd||' '||fm||' '||wh;
+  -- dbms_output.put_line(COLUMNSD);
+  --  dbms_output.put_line(COLUMNSD1);
+ --  dbms_output.put_line(l_COLUMNSD);
+     FND_FILE.PUT_LINE(fnd_file.LOG,'Data Written in file := '||l_COLUMNSD);
+    EXECUTE IMMEDIATE
+     'declare data VARCHAR2(4000);output_file  utl_file.file_type; BEGIN  output_file := utl_file.fopen ('''||PATH1||''','''||Fi_NAME1||''', ''W''); FOR rec IN ('||sql_stmt||') LOOP   data:= '||l_COLUMNSD||'; utl_file.put_line (output_file,data); END LOOP; utl_file.fclose(output_file);EXCEPTION WHEN utl_file.invalid_path THEN RAISE_APPLICATION_ERROR(-20000,   ''ERROR: Invalid path for file.''); WHEN utl_file.invalid_mode THEN RAISE_APPLICATION_ERROR(-20001,   ''ERROR: The open_mode parameter in FOPEN was invalid.'');WHEN utl_file.invalid_filehandle THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: File handle was invalid. .'');WHEN utl_file.invalid_operation THEN RAISE_APPLICATION_ERROR(-20002,''ERROR: File could not be opened or operated on as requested..'');WHEN utl_file.read_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the read operation..'');WHEN utl_file.write_error THEN   RAISE_APPLICATION_ERROR(-20002,''ERROR: Operating system error occurred during the write operation..'');WHEN utl_file.internal_error THEN RAISE_APPLICATION_ERROR(-20002,   ''ERROR: Operating system error occurred during the write operation..'');WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255)); END;';
+ END IF;
+ END IF;
+ END IF;
+   EXCEPTION
+    WHEN utl_file.invalid_path THEN
+    RAISE_APPLICATION_ERROR(-20000,   'ERROR: Invalid path for file.');
+    WHEN utl_file.invalid_mode THEN
+    RAISE_APPLICATION_ERROR(-20001,   'ERROR: The open_mode parameter in FOPEN was invalid.');
+    WHEN utl_file.invalid_filehandle THEN
+    RAISE_APPLICATION_ERROR(-20002,   'ERROR: File handle was invalid. .');
+    WHEN utl_file.invalid_operation THEN
+    RAISE_APPLICATION_ERROR(-20002,   'ERROR: File could not be opened or operated on as requested..');
+    WHEN utl_file.read_error THEN
+    RAISE_APPLICATION_ERROR(-20002,   'ERROR: Operating system error occurred during the read operation..');
+    WHEN utl_file.write_error THEN
+    RAISE_APPLICATION_ERROR(-20002,   'ERROR: Operating system error occurred during the write operation..');
+    WHEN utl_file.internal_error THEN
+    RAISE_APPLICATION_ERROR(-20002,   'ERROR: Operating system error occurred during the write operation..');
+    WHEN OTHERS THEN
+    RAISE_APPLICATION_ERROR(-20002,SQLCODE||SUBSTR(SQLERRM,1,255));
+END;
+END;
+/
+
+
