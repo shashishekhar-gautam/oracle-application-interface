@@ -1,0 +1,433 @@
+CREATE OR REPLACE procedure APPS.xxi_latefee_unapp_appcm_trx IS
+/*
+      created on  5 july 2023
+     The program fetches all late fees for which payment has been made.
+     Now we check the payment been made within 33 days or not
+     If made within 33 days we have unapply those late fees
+     for the purpose, first those receipts are unapplied
+     and then credit memo are applied in those credit memo.
+
+   author : Shashi shekhar gautam
+	  
+	   
+*/  
+   v_return_status          VARCHAR2 (1);
+   l_return_status          VARCHAR2 (1);
+   p_count                  NUMBER;
+   v_msg_count              NUMBER;
+   v_msg_data               VARCHAR2 (2000);
+   v_request_id             NUMBER;
+  -- v_context                VARCHAR2 (2);
+   l_cm_lines_tbl           arw_cmreq_cover.cm_line_tbl_type_cover;
+   l_customer_trx_id        NUMBER;
+   cm_trx_id                NUMBER;
+   v_interface_header_rec   arw_cmreq_cover.pq_interface_rec_type;
+   ind                      NUMBER;
+  -- l_trx_number             VARCHAR2 (30)=0;
+  
+  -- l_installment_no        number=0;
+   V_TRX_DATE DATE;
+   l_PAYMENT_FLAG BOOLEAN;
+ 
+  
+   
+   /*THE CURSOR FETCHES ALL OF THE LATE FEES TYPE INVOICE*/
+   cursor c_FETCH_LATE_FEES (
+   
+   p_cust_name varchar2 DEFAULT NULL,
+   p_sales_order_no varchar2 DEFAULT NULL,
+   p_trx_number varchar2 Default null 
+   )
+   is  SELECT * FROM (
+SELECT 
+  RCT.cust_trx_type_id, 
+  OKCH.ORG_ID, 
+  RCT.BILL_TO_SITE_USE_ID, 
+  rct.CUSTOMER_TRX_ID, 
+  rct.trx_number invoice_number, 
+  arps.amount_due_original balance_original, 
+  arps.amount_due_remaining balance_due_remaining, 
+  ARPS.amount_due_original-ARPS.amount_due_remaining AMT_PAID_LATE_FEES,
+  rct.trx_date inv_date, 
+  rct.attribute15 installment_no, 
+  rct.ct_reference 
+FROM 
+  ra_customer_trx_all rct, 
+  RA_CUSTOMER_TRX_LINES_ALL RCTL, 
+  ra_cust_trx_line_gl_dist_all rctd, 
+  hz_parties hp, 
+  hz_cust_accounts_all hca, 
+  ra_cust_trx_types_all rctt, 
+  hr_operating_units hou, 
+  ar_payment_schedules_all arps, 
+  okc_k_headers_all_b okch 
+WHERE 
+RCT.TRX_NUMBER NOT IN(
+  SELECT rcta1.trx_number           
+    FROM RA_CUSTOMER_TRX_ALL rcta1,
+         RA_CUSTOMER_TRX_ALL rcta2,
+         AR_RECEIVABLE_APPLICATIONS_ALL araa
+   WHERE rcta1.trx_number = RCT.TRX_NUMBER
+     AND araa.status = 'APP' --applied
+     AND araa.display = 'Y'  --Not UNapplied
+     AND rcta1.customer_trx_id = araa.APPLIED_CUSTOMER_TRX_ID
+     AND rcta2.customer_trx_id = araa.customer_trx_id
+  )
+  AND rct.customer_trx_id = rctd.customer_trx_id 
+  AND RCT.CUSTOMER_TRX_ID = RCTL.CUSTOMER_TRX_ID 
+  AND RCTL.CUSTOMER_TRX_LINE_ID = RCTD.CUSTOMER_TRX_LINE_ID 
+  AND rct.bill_to_customer_id = hca.cust_account_id 
+  and rctt.description = 'Late Payment Fees' 
+  --AND arps.status = 'OP' 
+  AND arps.CLASS = 'INV' 
+  AND okch.bill_to_site_use_id = rct.bill_to_site_use_id -- AND irr.contract_id = okch.id   --AND interface_header_context = 'OKL_CONTRACTS'
+  -- and sts_code IN ('BOOKED')
+  AND hp.party_id = hca.party_id 
+  AND rct.cust_trx_type_id = rctt.cust_trx_type_id 
+  AND rct.org_id = rctt.org_id 
+  AND rct.org_id = hou.organization_id 
+  AND arps.customer_trx_id(+) = rct.customer_trx_id 
+  AND rct.trx_number = NVL (p_trx_number, rct.trx_number) 
+  and rct.cust_trx_type_id IN (xx) 
+  and TO_NUMBER(TO_CHAR(rct.trx_date, 'YYYYMMDD'))= to_number( TO_char(sysdate - 20, 'YYYYMMDD')) 
+  and rct.ct_reference= 'xx'
+  AND hp.party_name = NVL (p_cust_name, hp.party_name) 
+  AND NVL (rct.ct_reference, 'XX') = NVL (NVL (p_sales_order_no, rct.ct_reference ), 'XX'  )    
+GROUP BY 
+  rct.trx_number, 
+  ARPS.AMOUNT_DUE_ORIGINAL, 
+  arps.amount_due_remaining, 
+  hp.party_name, 
+  rctt.TYPE, 
+  rct.invoice_currency_code, 
+  rct.trx_date, 
+  rctd.gl_date, 
+  rct.term_id, 
+  rctt.NAME, 
+  rct.attribute6, 
+  rct.attribute7, 
+  rct.attribute8, 
+  rct.attribute9, 
+  rct.attribute14, 
+  rct.attribute15, 
+  rct.ct_reference, 
+  rct.reason_code, 
+  rct.recurred_from_trx_number, 
+  rct.CUSTOMER_TRX_ID, 
+  recurred_from_trx_number, 
+  RCT.cust_trx_type_id, 
+  OKCH.ORG_ID, 
+  RCT.BILL_TO_SITE_USE_ID 
+ ) WHERE AMT_PAID_LATE_FEES >0 
+ ORDER BY INV_DATE;
+
+   
+   /*THE CURSOR FETCHES ALL OF THE INVOICES, FOR WHICH LATE FEES HAS BEEN GENERATED */
+   CURSOR C_FETCH_RELATED_INVOICE (P_ORG_ID varchar2,P_TRX_DATE DATE,p_ct_reference VARCHAR2,P_bill_to_site_use_id NUMBER)   
+   IS SELECT TRX_NUMBER,  TRX_DATE,  INTERFACE_HEADER_ATTRIBUTE9,  attribute15,ct_reference  ,batch_id,  AMOUNT_DUE_REMAINING ,
+   bill_to_site_use_id,BATCH_SOURCE_ID FROM  (
+ select  
+       RCT.trx_number
+      ,RCT.cust_trx_type_id
+       ,RCT.trx_date
+             
+       ,RCT.batch_source_id
+	   ,RCT.BATCH_ID
+       ,RCT.bill_to_customer_id
+       ,RCT.bill_to_site_use_id
+       ,RCT.attribute15  
+         ,RCT.interface_header_attribute9
+          ,RCT.org_id
+       ,RCTL.AMOUNT_DUE_ORIGINAL
+       ,RCTL.AMOUNT_DUE_REMAINING
+       ,RCTL.AMOUNT_INCLUDES_TAX_FLAG
+       ,RCT.ct_reference
+ from ra_customer_trx_all RCT,
+RA_CUSTOMER_TRX_LINES_ALL RCTL ,
+ar_payment_schedules_all APRS,
+okc_k_headers_all_b okch,
+okl_k_headers okh
+ where 
+ RCT.CUSTOMER_TRX_ID= RCTL.CUSTOMER_TRX_ID
+ AND    RCT.CUSTOMER_TRX_ID=apRs.CUSTOMER_TRX_ID
+ AND okch.bill_to_site_use_id = rct.bill_to_site_use_id
+  AND okch.ID = okh.ID
+  AND okch.org_id = p_org_id
+  and RCT.trx_date= p_trx_date
+ AND RCT.ct_reference= p_ct_reference --'1230208636' 
+ AND RCT.bill_to_site_use_id=P_bill_to_site_use_id
+ and RCT.interface_header_context = 'OKL_CONTRACTS'  
+ AND RCT.INVOICE_CURRENCY_CODE ='SAR' 
+ AND apRs.CLASS = 'INV'
+ order by rct.trx_date desc)  
+ ORDER BY TRX_DATE DESC
+ ;
+   
+/*THE CURSOR FETCHES IF INVOICE HAS BEEN PAID OR NOT */
+ CURSOR CHECK_INVOICE_PAID_YN  (P_TRX_NUMBER VARCHAR2,P_CT_REFERENCE VARCHAR2,P_BILL_TO_SITE_USED_ID VARCHAR2 ) is 
+				SELECT hp.party_name
+      ,hc.cust_account_id            
+      ,hc.account_number         customer_number
+      ,APS.amount_due_remaining      amount_due_remaining
+      ,aps.amount_due_original   amount_due_original
+      ,ra.trx_number
+  FROM ra_customer_trx_all       ra,
+       ra_customer_trx_lines_all rl,
+       ar_payment_schedules_all  aps,
+       ra_cust_trx_types_all     rt,
+       hz_cust_accounts          hc,
+       hz_parties                hp,
+       hz_cust_acct_sites_all    hcasa_bill,
+       hz_cust_site_uses_all     hcsua_bill,
+       hz_party_sites            hps_bill,
+       ra_cust_trx_line_gl_dist_all rct
+ WHERE ra.customer_trx_id           = rl.customer_trx_id
+   AND ra.customer_trx_id           = aps.customer_trx_id
+   AND ra.org_id                    = aps.org_id
+   AND rct.customer_trx_id          = aps.customer_trx_id
+   AND rct.customer_trx_id          = ra.customer_trx_id
+   AND rct.customer_trx_id          = rl.customer_trx_id
+   AND rct.customer_trx_line_id     = rl.customer_trx_line_id
+   AND ra.complete_flag             = 'Y'
+   AND rl.line_type                 IN ('FREIGHT', 'LINE')
+   AND ra.cust_trx_type_id          = rt.cust_trx_type_id
+   AND ra.bill_to_customer_id       = hc.cust_account_id
+   AND hc.status                    = 'A'
+   AND hp.party_id                  = hc.party_id
+   AND hcasa_bill.cust_account_id   = ra.bill_to_customer_id
+   AND hcasa_bill.cust_acct_site_id = hcsua_bill.cust_acct_site_id
+   AND hcsua_bill.site_use_code     = 'BILL_TO'
+   AND hcsua_bill.site_use_id       = ra.bill_to_site_use_id
+   AND hps_bill.party_site_id       = hcasa_bill.party_site_id
+   AND hcasa_bill.status            = 'A'
+   AND hcsua_bill.status            = 'A'
+   AND aps.amount_due_remaining     <> 0
+   AND aps.status                   = 'OP'
+   AND RA.CT_REFERENCE = P_CT_REFERENCE
+   AND RA.BILL_TO_SITE_USE_ID =P_BILL_TO_SITE_USED_ID
+   AND RA.TRX_NUMBER = P_TRX_NUMBER
+   ;
+				
+				
+	LC CHECK_INVOICE_PAID_YN%ROWTYPE;			
+				
+  CURSOR c_inv ( p_trx_number varchar2,P_CT_REFERNCE VARCHAR2 ,P_BILL_TO_SITE_USED_ID VARCHAR2  -----shashi bill_to_site_id
+   )
+   IS
+      SELECT rct.trx_number,
+             rct.customer_trx_id,
+             rctl.customer_trx_line_id,
+             rctl.quantity_invoiced,
+             unit_selling_price
+      FROM ra_customer_trx_all rct, ra_customer_trx_lines_all rctl
+      WHERE     rct.customer_trx_id = rctl.customer_trx_id
+            AND trx_number = p_trx_number
+			AND CT_REFERENCE= P_CT_REFERNCE
+			AND RCT.bill_to_site_use_id=P_BILL_TO_SITE_USED_ID
+		    AND line_type = 'LINE';		
+			
+			
+	cursor c_receipt(p_trx_number varchar2,P_CT_REFERNCE VARCHAR2 ,P_BILL_TO_SITE_USED_ID VARCHAR2 ) 
+is	
+			SELECT distinct  acra.receipt_number  ,acra.cash_receipt_id 
+         
+    FROM RA_CUSTOMER_TRX_ALL rct,
+         AR_RECEIVABLE_APPLICATIONS_ALL araa,
+         AR_CASH_RECEIPTS_ALL acra  
+   WHERE
+      araa.status = 'APP'  
+      and rct.customer_trx_id = araa.APPLIED_CUSTOMER_TRX_ID
+      
+     AND acra.cash_receipt_id = araa.cash_receipt_id
+			and araa.application_type= 'CASH'
+			and rct.cust_trx_type_id IN (1229, 2232) 
+			AND acra.customer_site_use_id = P_BILL_TO_SITE_USED_ID
+			AND acra.attribute5=P_CT_REFERNCE
+			AND rct.trx_number = p_trx_number
+ ;			 
+			NFLAG NUMBER:=0;
+
+BEGIN
+        
+             DBMS_OUTPUT.put_line('--start--'||chr(10)); 
+		 
+	for I_LATE_FEES in c_FETCH_LATE_FEES  
+	loop
+	      mo_global.set_policy_context ('S', I_LATE_FEES.ORG_ID);		    
+		  DBMS_OUTPUT.put_line('Late Fees Invoices fetched   date -- trx Number -- ct reference -- orgid '|| I_LATE_FEES.INV_DATE ||'--'||I_LATE_FEES.invoice_number||'--'||I_LATE_FEES.CT_REFERENCE||'--'||I_LATE_FEES.org_id);
+		  SELECT TO_DATE(I_LATE_FEES.INV_DATE)-12 INTO V_TRX_DATE FROM DUAL;		 
+				  FOR L_RELATED_INVOICE IN C_FETCH_RELATED_INVOICE  
+				  ( I_LATE_FEES.ORG_ID,V_TRX_DATE,I_LATE_FEES.CT_REFERENCE,I_LATE_FEES.bill_to_site_use_id )
+				  LOOP
+				            
+                                            DBMS_OUTPUT.put_line(chr(10)||'1. Fetching related invoices');							 
+                                            DBMS_OUTPUT.put_line( '2. Found related invoices  date   --   invoice number   --   ct_reference  '|| V_TRX_DATE||'  --  '||L_RELATED_INVOICE.TRX_NUMBER||'   --   '||L_RELATED_INVOICE.CT_REFERENCE);
+                                            DBMS_OUTPUT.PUT_LINE( '3. Context and Installment Number are '|| L_RELATED_INVOICE.interface_header_attribute9||'-'||L_RELATED_INVOICE.attribute15 );             
+                                            l_PAYMENT_FLAG:=FALSE; 										
+											
+											OPEN CHECK_INVOICE_PAID_YN (P_TRX_NUMBER => L_RELATED_INVOICE.TRX_NUMBER, P_CT_REFERENCE=>L_RELATED_INVOICE.CT_REFERENCE ,P_BILL_TO_SITE_USED_ID=> L_RELATED_INVOICE.BILL_TO_SITE_USE_ID);
+											FETCH CHECK_INVOICE_PAID_YN INTO LC;
+										
+											IF CHECK_INVOICE_PAID_YN%NOTFOUND 
+												THEN
+												 l_PAYMENT_FLAG:=TRUE; 
+												 DBMS_OUTPUT.put_line('4. Payment  exists, Eligible for CM, for  date   --   trx number   --  ct reference '|| V_TRX_DATE||'   --   '||L_RELATED_INVOICE.TRX_NUMBER ||'  --  '||L_RELATED_INVOICE.CT_REFERENCE); 
+												 
+											ELSIF CHECK_INVOICE_PAID_YN%FOUND 
+												 THEN
+												  l_PAYMENT_FLAG:=FALSE;
+												  DBMS_OUTPUT.put_line('4. Payment Doesnt exists  or is partial payment  date   --   trx number   --  ct reference '|| V_TRX_DATE||'   --   '||L_RELATED_INVOICE.TRX_NUMBER||'  --  '||L_RELATED_INVOICE.CT_REFERENCE); 
+											      --DBMS_OUTPUT.put_line('Exiting');
+											       NFLAG:=+1;
+											END IF;											 
+
+											CLOSE CHECK_INVOICE_PAID_YN;
+											if NFLAG>0 then
+											DBMS_OUTPUT.put_line(chr(10));
+											DBMS_OUTPUT.PUT_LINE('There is payment missing for one line for  '||NFLAG||'  transaction line');
+											end if;
+														 
+							 			  
+								END LOOP; 
+								 
+								IF l_PAYMENT_FLAG = TRUE AND NFLAG=0 
+											THEN
+									
+												   FOR LC_REC  IN c_receipt (I_LATE_FEES.invoice_number,I_LATE_FEES.CT_REFERENCE,I_LATE_FEES.bill_to_site_use_id)
+												   LOOP
+												           
+												           --select cash_receipt_id into v_receipt_number from ar_cash_receipts_all where receipt_number=LC_REC.Cash_Rec_App_to_AR_Trx_No;
+														   DBMS_OUTPUT.put_line (chr(10)||'Invoking unapply receipt process   for: receipt against trx with :  receipt_number -  invoice_number - ct_reference : as '||LC_REC.receipt_number||' and '||I_LATE_FEES.invoice_number||'  and   '||I_LATE_FEES.CT_REFERENCE);
+														   ind :=1;
+														   
+														   
+															
+															AR_RECEIPT_API_PUB.unapply
+                                                                ( p_api_version => 1.0,
+                                                                p_init_msg_list => FND_API.G_TRUE,
+                                                                p_commit => FND_API.G_TRUE,
+                                                                p_validation_level => FND_API.G_VALID_LEVEL_FULL,
+                                                                x_return_status => l_return_status,
+                                                                x_msg_count => v_msg_count,
+                                                                x_msg_data => v_msg_data,
+                                                                p_cash_receipt_id => LC_REC.cash_receipt_id,
+                                                                p_customer_trx_id=>I_LATE_FEES.customer_trx_id,
+                                                                p_reversal_gl_date => sysdate
+                                                            
+                                                                );
+                                                                commit;
+																	IF l_return_status = 'S' THEN
+																	   DBMS_OUTPUT.put_line('Receipt Unapply on account is Sucessful :');
+																	   commit;
+																	ELSE
+																	   DBMS_OUTPUT.put_line('Message count ' || v_msg_count);
+																	   IF v_msg_count = 1 THEN
+																		  DBMS_OUTPUT.put_line('v_msg_data '||v_msg_data);
+																	   ELSIF v_msg_count > 1 THEN
+																	   LOOP
+																			  p_count := p_count+1;
+																			  v_msg_data := FND_MSG_PUB.Get(FND_MSG_PUB.G_NEXT,FND_API.G_FALSE);
+																			  IF v_msg_data IS NULL THEN
+																				 EXIT;
+																			  END IF;
+																			  DBMS_OUTPUT.put_line('Message' || p_count ||'---'||v_msg_data);
+																		END LOOP;
+																		END IF;
+																	END IF;		
+                                                                    																	
+												    END LOOP;								
+													
+													
+													IF l_return_status = 'S' THEN
+													FOR lc_inv IN c_inv (I_LATE_FEES.invoice_number,I_LATE_FEES.CT_REFERENCE,I_LATE_FEES.bill_to_site_use_id)
+														LOOP
+														DBMS_OUTPUT.put_line (chr(10)||'Invoking credit memo process for trx_no and  CT_REFERNCE are '||I_LATE_FEES.invoice_number||'  and   '||I_LATE_FEES.CT_REFERENCE);
+														  ind                 := 1;
+														  
+														 -- v_interface_header_rec(IND).CT_REFERENCE=L_RELATED_INVOICE.CT_REFERENCE;
+														  l_customer_trx_id   := lc_inv.customer_trx_id;
+														  l_cm_lines_tbl (ind).customer_trx_line_id   := lc_inv.customer_trx_line_id;
+														  l_cm_lines_tbl (ind).quantity_credited   := lc_inv.quantity_invoiced * -1;
+														  l_cm_lines_tbl (ind).price   := lc_inv.unit_selling_price;
+														  l_cm_lines_tbl (ind).extended_amount   := lc_inv.quantity_invoiced * lc_inv.unit_selling_price * -1		  
+														  ;
+														  
+														END LOOP;
+														
+														
+														
+														/*apply credit memo*/
+                                                       
+												 
+														   ar_credit_memo_api_pub.create_request (          -- standard api parameters
+																							  p_api_version => 1.0,
+																							  p_init_msg_list => fnd_api.g_true,
+																							  p_commit => fnd_api.g_false-- credit memo request parameters
+																							  ,
+																							  p_customer_trx_id => l_customer_trx_id,
+																							  p_line_credit_flag => 'Y',
+																							  p_cm_line_tbl => l_cm_lines_tbl,
+																							  p_cm_reason_code => 'RETURN',
+																							  p_skip_workflow_flag => 'Y',
+																							  p_batch_source_name => 'OKL_CONTRACTS',
+																							  p_interface_attribute_rec => v_interface_header_rec,
+																							  p_credit_method_installments => NULL,
+																							  p_credit_method_rules => NULL,
+																							  x_return_status => v_return_status,
+																							  x_msg_count => v_msg_count,
+																							  x_msg_data => v_msg_data,
+																							  x_request_id => v_request_id
+													   );
+													   
+														commit;
+													   DBMS_OUTPUT.put_line ('Message count ' || v_msg_count);
+
+														IF v_msg_count = 1
+														THEN
+														  DBMS_OUTPUT.put_line ('l_msg_data ' || v_msg_data);
+														ELSIF v_msg_count > 1
+														THEN
+															  LOOP
+																 p_count   := p_count + 1;
+																 v_msg_data   :=
+																	fnd_msg_pub.get (fnd_msg_pub.g_next, fnd_api.g_false);
+
+																 IF v_msg_data IS NULL
+																 THEN
+																	EXIT;
+																 END IF;
+
+																 DBMS_OUTPUT.put_line ('Message' || p_count || '   --  -' || v_msg_data);
+															  END LOOP;
+														END IF;
+
+														IF v_return_status <> 'S'
+														   THEN
+															  DBMS_OUTPUT.put_line ('Failed');
+														   ELSE
+                                                               BEGIN
+                                                                  SELECT cm_customer_trx_id
+                                                                  INTO cm_trx_id
+                                                                  FROM ra_cm_requests_all
+                                                                  WHERE request_id = v_request_id;
+                                                                  EXCEPTION when others THEN
+                                                                 DBMS_OUTPUT.put_line ('CM TRX ID NOT FOUND'); 
+                                                                END;  
+
+															  DBMS_OUTPUT.put_line (' CM trx_id = ' || cm_trx_id);
+															  DBMS_OUTPUT.put_line ('CM TRX ID created against transaction number and ct_reference number '||cm_trx_id||'  and   '||I_LATE_FEES.CT_REFERENCE);
+															  DBMS_OUTPUT.put_line (CHR(10)); 
+															-- commit;
+														END IF;	
+												end if;
+								END IF;		 
+     NFLAG:=0;	
+     DBMS_OUTPUT.put_line ('  ------------------  ');
+       --  DBMS_OUTPUT.put_line (CHR(10));
+   
+	END LOOP;
+	 DBMS_OUTPUT.put_line ('  --------END----------  ');    
+	 EXCEPTION when others THEN
+     DBMS_OUTPUT.put_line ('Into undefined exception'||sqlcode||sqlerrm);
+	END xxi_latefee_unapp_appcm_trx;
+/
