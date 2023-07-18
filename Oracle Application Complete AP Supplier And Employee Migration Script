@@ -1,0 +1,1780 @@
+CREATE OR REPLACE PACKAGE APPS.XXxx_EMPLOYEE_SUPPLIER_MIG
+AS
+--*********************************************************************
+--
+--
+--*********************************************************************
+-- 
+-- Package Name   :  XXxx_EMPLOYEE_SUPPLIER_MIG
+--
+-- Description    :  Employee and Supplier Creation Package Specification
+--
+-- DEVELOPMENT/MAINTENANCE HISTORY
+--
+-- date          author             Version  Description
+-- ---------     ----------------   -------  --------------------------
+--                Shashi Shekhar Gautam
+--
+--*********************************************************************
+
+   PROCEDURE MAIN (p_errbuf       OUT  VARCHAR2,
+                   p_retcode      OUT  VARCHAR2
+                   );
+   --
+   PROCEDURE UPDATE_EMPLOYEE(x_ret_code OUT VARCHAR2
+                  ,x_err_buf  OUT VARCHAR2
+                  );
+
+   G_NEXT                   NUMBER        :=FND_MSG_PUB.G_NEXT;
+   G_FALSE                  VARCHAR2(1)   :=FND_API.G_FALSE;
+   G_COUNTRY_CODE           VARCHAR2(50)  :='IN';
+   G_REQUEST_ID             NUMBER        := FND_GLOBAL.CONC_REQUEST_ID;
+   G_ORG_ID                 NUMBER        := FND_PROFILE.VALUE ('ORG_ID');
+   G_USER_ID                NUMBER        := FND_PROFILE.VALUE ('USER_ID');
+   G_LOGIN_ID               NUMBER        := FND_GLOBAL.LOGIN_ID;
+   G_ERROR                  NUMBER        := 2;
+   G_WARNING                NUMBER        := 1;
+   G_RECORD                 NUMBER        := 0;
+
+END XXxx_EMPLOYEE_SUPPLIER_MIG;
+/
+
+
+
+
+
+CREATE OR REPLACE PACKAGE BODY APPS.XXxx_EMPLOYEE_SUPPLIER_MIG
+AS
+--*********************************************************************
+--
+--
+--*********************************************************************
+--
+-- Package Name   :  XXxx_EMPLOYEE_SUPPLIER_MIG
+--
+-- Description    :  Supplier Migration Package Body
+--
+-- DEVELOPMENT/MAINTENANCE HISTORY
+--
+-- date          author             Version  Description
+-- ---------     ----------------   -------  --------------------------
+
+
+
+ -- ***************************************************************************
+   -- Procedure/Function Name   :  Create_Employee
+   --
+   -- Description    :  To Create Employees
+   --
+   -- parameters     :
+   --
+   -- Return/Exit    : <return/exit description>
+   --
+   --
+   -- DEVELOPMENT/MAINTENANCE HISTORY
+   --
+   -- date          author             Version  Description
+   -- ------------  -----------------  -------  --------------------------------
+   --                                   1.0.0    Initial Version
+   -- <date>        <author name>      <ver>    <description>
+   --
+   -- ***************************************************************************
+
+    Procedure Create_Employee
+    AS
+
+    CURSOR lcu_emp_creation
+    IS
+    SELECT XEMT.*,XEMT.rowid row_id
+    FROM XXxx_EMP_MIG_TAB XEMT
+    order by 1;
+    lv_error_msg varchar2(2000);
+    lv_gender                        varchar2(1);
+    ln_employee_id                      NUMBER(10);
+    ln_emp_person_id                    NUMBER(10);
+    ln_person_id                        number;
+    ln_assignment_id                    number;
+    ln_per_object_version_number        number;
+    ln_asg_object_version_number        number;
+    ld_per_effective_start_date         date;
+    ld_per_effective_end_date           date;
+    lv_full_name                        varchar2(240);
+    ln_per_comment_id                   number;
+    ln_assignment_sequence              number;
+    lv_assignment_number                varchar2(240);
+    lb_name_combination_warning         boolean;
+    lb_assign_payroll_warning           boolean;
+    lb_orig_hire_warning                boolean;
+    ln_empno_check                      NUMBER;
+    --
+     x_effective_start_date       DATE;
+      x_effective_end_date         DATE;
+      x_applicant_number           VARCHAR2 (100);
+      x_comment_id                 NUMBER;
+      x_current_applicant_flag     VARCHAR2 (250);
+      x_current_emp_or_apl_flag    VARCHAR2 (250);
+      x_employee_number            VARCHAR2 (250) := '0070';
+      x_full_name                  VARCHAR2 (250);
+      x_npw_number                 VARCHAR2 (250);
+      x_object_version_number      VARCHAR2 (250) := 5;
+      x_object_v_no                VARCHAR2 (250);
+      x_name_combination_warning   BOOLEAN;
+      x_dob_null_warning           BOOLEAN;
+      x_orig_hire_warning          BOOLEAN;
+      x_address_id                 NUMBER;
+      x_address_version            NUMBER;
+      lv_title                     VARCHAR2(10);
+      --
+   BEGIN
+     FOR lr_emp_creation IN lcu_emp_creation
+     LOOP
+     exit when  lcu_emp_creation%NOTFOUND;
+
+       lv_error_msg := NULL;
+       ln_empno_check := 0;
+
+      ---
+
+       IF lr_emp_creation.last_name is null THEN
+          lv_error_msg := 'Last Name is Mandatory, ';
+
+          update XXxx_EMP_MIG_TAB
+          set processed_flag = 'E'
+              ,error_message = lv_error_msg
+          where rowid = lr_emp_creation.row_id;
+
+       ELSE
+
+        IF lr_emp_creation.employee_number is null THEN
+          lv_error_msg := 'Employee Number is Mandatory, ';
+        END IF;
+        BEGIN
+         SELECT person_id
+         INTO ln_employee_id
+         FROM PER_ALL_PEOPLE_F
+         WHERE LAST_NAME =  lr_emp_creation.last_name
+         AND  nvl(FIRST_NAME,'X') = nvl(lr_emp_creation.FIRST_name,'X')
+         AND  nvl(middle_names,'X') = nvl(lr_emp_creation.middle_name,'X')
+         AND  employee_number = lr_emp_creation.employee_number;
+        EXCEPTION
+          when others then
+            ln_employee_id := null;
+        END;
+         IF ln_employee_id IS NOT NULL AND ln_employee_id <> 0 THEN
+
+            lv_error_msg  := lv_error_msg||'Employee already Exist,';
+
+           update XXxx_EMP_MIG_TAB
+           set processed_flag = null
+              ,employee_id = ln_employee_id
+              ,error_message = lv_error_msg
+           where rowid = lr_emp_creation.row_id;
+           --
+
+           commit;
+           --
+        ELSE
+           begin
+             select count(*)
+             into ln_empno_check
+             from per_all_people_f
+             where employee_number = lr_emp_creation.employee_number;
+
+           exception
+             when others then
+             ln_empno_check := 0;
+           end;
+         if ln_empno_check > 0 THEN
+            lv_error_msg := lv_error_msg||'Employee Number Already Exist for different Employee, ';
+
+            update XXxx_EMP_MIG_TAB
+             set processed_flag = 'E'
+                ,error_message = lv_error_msg
+              where rowid = lr_emp_creation.row_id;
+
+           commit;
+         end if;
+
+         if lr_emp_creation.employment_start_date is NULL THEN
+             lv_error_msg := lv_error_msg||'Joining Date is Mandatory, ';
+
+             update XXxx_EMP_MIG_TAB
+             set processed_flag = 'E'
+                ,error_message = lv_error_msg
+              where rowid = lr_emp_creation.row_id;
+             commit;
+         end if;
+         --
+         if lr_emp_creation.gender is NULL THEN
+             lv_error_msg := lv_error_msg||'gender is Mandatory, ';
+
+             update XXxx_EMP_MIG_TAB
+             set processed_flag = 'E'
+                ,error_message = lv_error_msg
+              where rowid = lr_emp_creation.row_id;
+              commit;
+         else
+             select decode(initcap(lr_emp_creation.title),'Mr','M','Ms','F',initcap(lr_emp_creation.title))
+             into lv_gender
+             from dual;
+             --
+             IF lv_gender <> 'M' AND lv_gender <> 'F' THEN
+                lv_error_msg := lv_error_msg||'gender is Not Valid, ';
+
+             ELSE
+              lv_title := NULL;
+              BEGIN
+                select decode(lv_gender,'M','MR.','MS.')
+                into lv_title
+                from dual;
+              EXCEPTION
+                when others then
+                lv_title := NULL;
+              END;
+
+             END IF;
+         end if;
+        end if;
+        END IF;
+
+        IF lv_error_msg is null then
+
+          --
+          begin
+            hr_employee_api.create_employee
+                                           (p_hire_date =>  trunc(lr_emp_creation.employment_start_date)
+                                           ,p_business_group_id => 0
+                                           ,p_last_name   => lr_emp_creation.last_name
+                                           ,p_sex     => lv_gender
+                                           ,p_title   => lv_title
+                                           ,p_first_name  => lr_emp_creation.first_name
+                                           ,p_middle_names => lr_emp_creation.middle_name
+                                           ,p_date_of_birth => trunc(lr_emp_creation.date_of_birth)
+                                           ,p_employee_number => lr_emp_creation.employee_number
+                                           ,p_person_id      => ln_person_id
+                                           ,p_person_type_id => 6
+                                           ,p_attribute1     => lr_emp_creation.bank_name
+                                           ,p_attribute2     => lr_emp_creation.bank_branch
+                                           ,p_attribute3     => lr_emp_creation.bank_account
+                                           ,p_attribute4     => lr_emp_creation.ifsc_code
+                                           ,p_attribute5     => lr_emp_creation.status
+                                           ,p_national_identifier => lr_emp_creation.PAN_NUMBER
+                                           ,p_assignment_id => ln_assignment_id
+                                           ,p_per_object_version_number => ln_per_object_version_number
+                                           ,p_asg_object_version_number => ln_asg_object_version_number
+                                           ,p_per_effective_start_date => ld_per_effective_start_date
+                                           ,p_per_effective_end_date  => ld_per_effective_end_date
+                                           ,p_full_name  => lv_full_name
+                                           ,p_per_comment_id  => ln_per_comment_id
+                                           ,p_assignment_sequence => ln_assignment_sequence
+                                           ,p_assignment_number => lv_assignment_number
+                                           ,p_name_combination_warning => lb_name_combination_warning
+                                           ,p_assign_payroll_warning   => lb_assign_payroll_warning
+                                           ,p_orig_hire_warning  => lb_orig_hire_warning
+                                           ) ;
+             commit;
+            exception
+             when others then
+               lv_error_msg := lv_error_msg||'error in CREATE_EMPLOYEE'||' - '||SQLERRM;
+            end;
+         IF ln_person_id is not null AND ln_person_id <>0 then
+           begin
+            select person_id
+            into ln_emp_person_id
+            from per_all_people_f
+            where person_id = ln_person_id;
+           exception
+             when others then
+               ln_emp_person_id := null;
+           end;
+           --
+          IF ln_emp_person_id is not null AND ln_emp_person_id <>0 then
+           update XXxx_EMP_MIG_TAB
+           set employee_id = ln_emp_person_id
+           where rowid = lr_emp_creation.row_id;
+
+           --
+           commit;
+           --
+           END IF;
+         END IF;
+         FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'Employees Created'||chr(10)||lr_emp_creation.last_name||' '||lr_emp_creation.First_name||'-'||lr_emp_creation.employee_number);
+
+
+        END IF;
+        FND_FILE.PUT_LINE (FND_FILE.LOG,lr_emp_creation.last_name||' '||lr_emp_creation.First_name||' - '||lv_error_msg);
+        --FND_FILE.PUT_LINE (FND_FILE.OUTPUT,ln_employee_num||chr(10));
+
+     END LOOP;
+   END Create_Employee;
+--
+   PROCEDURE CREATE_ADDRESS
+   AS
+   CURSOR lcu_fetch_address
+   IS
+   SELECT  XEM.*,XEM.ROWID row_id
+   FROM XXxx_EMP_MIG_TAB XEM
+   where employee_id is not null;
+
+   lv_error_msg     VARCHAR2(2000);
+   ln_address_id           NUMBER;
+    x_address_id                 NUMBER;
+    x_address_version            NUMBER;
+   BEGIN
+       FOR lr_fetch_address IN lcu_fetch_address LOOP
+
+          EXIT WHEN lcu_fetch_address%NOTFOUND;
+
+              lv_error_msg := NULL;
+              ln_address_id := 0;
+
+              IF lr_fetch_address.address_line1 IS NULL THEN
+
+                lv_error_msg := lv_error_msg||'Address Line1 is mandatory for Address Creation';
+                update XXxx_EMP_MIG_TAB
+                set processed_flag = 'E'
+                ,error_message = lv_error_msg
+                 where rowid = lr_fetch_address.row_id;
+              commit;
+              ELSE
+               BEGIN
+                 SELECT ADDRESS_ID
+                 INTO ln_address_id
+                 from PER_ADDRESSES
+                 where ADDRESS_LINE1 = lr_fetch_address.address_line1
+                 and NVL(ADDRESS_LINE2,'X')   = nvl(lr_fetch_address.address_line2,'X')
+                 and person_id = lr_fetch_address.employee_id;
+               EXCEPTION
+                 WHEN OTHERS THEN
+                     ln_address_id := 0;
+               END;
+               IF ln_address_id = 0 THEN
+                BEGIN
+                hr_person_address_api.create_person_address( p_effective_date => trunc(sysdate)
+                                                            ,p_person_id => lr_fetch_address.employee_id
+                                                            ,p_primary_flag => 'Y'
+                                                            ,p_style => 'IN_GLB'
+                                                            ,p_date_from => trunc(sysdate)
+                                                            ,p_address_line1 => lr_fetch_address.address_line1
+                                                            ,p_address_line2 => lr_fetch_address.address_line2
+                                                            ,p_address_line3 => lr_fetch_address.address_line3
+                                                            --,p_town_or_city  => lr_fetch_address.city
+                                                            ,p_postal_code   => lr_fetch_address.pincode
+                                                            ,p_country   => 'IN'
+                                                            ,p_address_id => x_address_id
+                                                            ,p_object_version_number => x_address_version
+                                                            ) ;
+                IF x_address_id is not null THEN
+                  update XXxx_EMP_MIG_TAB
+                  set address_id = x_address_id
+                  where rowid = lr_fetch_address.row_id;
+                  --
+                  lv_error_msg := lv_error_msg||'Address Created - '||x_address_id;
+                  FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'Address Created'||chr(10)||lr_fetch_address.last_name||' '||lr_fetch_address.First_name||'-'||x_address_id);
+               ELSE
+                  lv_error_msg := lv_error_msg||'Address can not be created';
+                  FND_FILE.PUT_LINE (FND_FILE.LOG,lr_fetch_address.last_name||' '||lr_fetch_address.First_name||' - '||lv_error_msg);
+               END IF;
+                EXCEPTION
+                  WHEN OTHERS THEN
+                    lv_error_msg := lv_error_msg||'Exception while creating address'||SQLERRM;
+                    FND_FILE.PUT_LINE (FND_FILE.LOG,lr_fetch_address.last_name||' '||lr_fetch_address.First_name||' - '||lv_error_msg);
+               END;
+
+               ELSE
+                 update XXxx_EMP_MIG_TAB
+                  set address_id = ln_address_id
+                  where rowid = lr_fetch_address.row_id;
+               END IF;
+              END IF;
+       END LOOP;
+    END CREATE_ADDRESS;
+   -- ***************************************************************************
+   -- Procedure/Function Name   :  VALIDATE_VENDOR_RECORDS
+   --
+   -- Description    :  Supplier Migration Records Validation
+   --
+   -- parameters     :
+   --
+   -- Return/Exit    : <return/exit description>
+   --
+   --
+   -- DEVELOPMENT/MAINTENANCE HISTORY
+   --
+   -- date          author             Version  Description
+   -- ------------  -----------------  -------  --------------------------------
+   --                                   1.0.0    Initial Version
+   -- <date>        <author name>      <ver>    <description>
+   --
+   -- ***************************************************************************
+
+   PROCEDURE VALIDATE_VENDOR_RECORDS
+   AS
+
+   CURSOR cur_vendor IS
+   SELECT DISTINCT trim(FIRST_NAME||' '||MIDDLE_NAME||decode(MIDDLE_NAME,NULL,'',' ')||LAST_NAME) VENDOR_CODE,employee_number,PREPAYMENT_ACCOUNT,LIABILITY_ACCOUNT,employee_id
+    ,PAN_NUMBER
+   FROM   XXxx_EMP_MIG_TAB
+   WHERE  employee_id is not null;
+
+
+   -- =====================================================
+   --  Cursor to validate the vendor Type
+   -- =====================================================
+
+   CURSOR cur_vend_type(p_vend_type IN VARCHAR2) IS
+   SELECT 1,lookup_code
+   FROM   po_lookup_codes
+   WHERE lookup_type                      = 'VENDOR TYPE'
+   AND   UPPER(lookup_code)             = UPPER(p_vend_type)
+   AND   enabled_flag                     = 'Y'
+   AND   NVL (inactive_date, SYSDATE + 1) > SYSDATE;
+
+   -- =====================================================
+   --  Cursor to validate the Organization Type
+   -- =====================================================
+
+   CURSOR cur_org_type(p_org_type IN VARCHAR2) IS
+   SELECT 1,lookup_code
+   FROM   po_lookup_codes
+   WHERE lookup_type                      = 'ORGANIZATION TYPE'
+   AND   UPPER(displayed_field)           = UPPER(p_org_type)
+   AND   enabled_flag                     = 'Y'
+   AND   NVL (inactive_date, SYSDATE + 1) > SYSDATE;
+
+   lc_vend_type                      VARCHAR2(50);
+   lc_organization_type              VARCHAR2(50);
+   ln_temp_var            	     NUMBER;
+   lc_error_location                 VARCHAR2(1000);
+   ln_count                          NUMBER;
+   lc_error_message                  VARCHAR2(4000);
+   ln_sup_count                      NUMBER;
+   ln_supp_succ_count                NUMBER;
+   ln_supp_fail_count                NUMBER;
+   ln_employee_id                    NUMBER;
+   lc_offset_flag                    VARCHAR2(1);
+   lc_federal_flag                   VARCHAR2(1);
+   l_liability_account               NUMBER := NULL;
+   l_PREPAYMENT_ACCOUNT                  NUMBER := NULL;
+   BEGIN
+   ln_count :=0;
+   ln_supp_succ_count := 0;
+   ln_supp_fail_count := 0;
+
+
+   --
+   UPDATE XXxx_EMP_MIG_TAB xxtb
+   SET processed_flag = 'S'
+   WHERE trim(FIRST_NAME||' '||MIDDLE_NAME||decode(MIDDLE_NAME,NULL,'',' ')||LAST_NAME) IN (SELECT vendor_name FROM po_vendors)
+   and employee_id is not null;
+   COMMIT;
+
+   FOR c_vendor IN cur_vendor LOOP
+      lc_error_message   := NULL;
+      lc_federal_flag    := NULL;
+      -- +===========================================================================+
+      -- check if Supplier Name is NULL
+      -- +===========================================================================+
+      IF c_vendor.VENDOR_CODE IS NULL THEN
+         lc_error_message := lc_error_message ||'Supplier Name should not be NULL, ';
+      ELSE
+         ln_count :=0;
+      END IF;
+
+      -- +===========================================================================+
+      -- check for records existance in Oracle
+      -- +===========================================================================+
+      lc_error_location := 'Before checking records existence in oracle';
+      ln_count          :=0;
+
+      SELECT COUNT(*)
+      INTO   ln_count
+      FROM   po_vendors PV
+      WHERE UPPER(PV.vendor_name) = UPPER(c_vendor.VENDOR_CODE)
+       and  pv.employee_id = c_vendor.employee_id;
+
+      IF ln_count =0 THEN
+         lc_error_location  :='Before Vender Type validation';
+         ln_employee_id     := NULL;
+         lc_offset_flag     := NULL;
+
+         -- +===========================================================================+
+         -- check if EMPLOYEE NUMBER IS NULL in the file is valid
+         -- +===========================================================================+
+
+               IF c_vendor.employee_number is null THEN
+	             ln_employee_id := NULL;
+	             lc_error_message:= lc_error_message||'Employee number needed for this vendor, ';
+
+               END IF;
+
+
+         ln_temp_var := 0;
+
+        IF c_vendor.employee_number IS NOT NULL THEN
+           BEGIN
+             SELECT person_id
+             INTO ln_employee_id
+             FROM per_all_people_f
+             WHERE EMPLOYEE_NUMBER = c_vendor.employee_number;
+           EXCEPTION
+             WHEN OTHERS THEN
+                ln_employee_id := NULL;
+           END;
+       END IF;
+         --
+       IF c_vendor.PAN_NUMBER IS NULL THEN
+           lc_error_message := lc_error_message ||'Pan No should not be NULL, ';
+         ELSIF length(c_vendor.PAN_NUMBER) <> 10 then
+           lc_error_message := lc_error_message ||'Pan No should be of 10 Digits, ';
+       END IF;
+
+         -- +===========================================================================+
+         -- Load Supplier Data into supplier interface table
+         -- +===========================================================================+
+
+         IF lc_error_message IS NULL THEN
+	    BEGIN
+	       INSERT INTO ap_suppliers_int(vendor_name
+                                           ,SEGMENT1
+                                           ,vendor_interface_id
+                                           ,enabled_flag
+                                           ,vendor_type_lookup_code
+                                           ,employee_id
+                                           ,offset_tax_flag
+                                           ,federal_reportable_flag
+                                           ,PAY_GROUP_LOOKUP_CODE
+                                           ,TERMS_DATE_BASIS
+                                           ,INVOICE_CURRENCY_CODE
+                                           ,PAYMENT_CURRENCY_CODE
+                                           ,terms_id
+                                           ,status
+                                           ,attribute1
+                                           ,attribute2
+                                          )
+               VALUES                      (trim(c_vendor.VENDOR_CODE)
+                                           ,NULL
+                                           --,c_vendor.employee_number
+                                           ,ap_suppliers_int_s.NEXTVAL
+                                           ,'Y'
+                                           ,'EMPLOYEE'
+                                           ,ln_employee_id
+                                           --,c_vendor.legacy_vendor_num
+                                          -- ,lc_organization_type
+                                           ,lc_offset_flag
+                                          -- ,lc_federal_flag
+                                           ,'N'
+                                           ,NULL--'EMP'
+                                           ,'Invoice'
+                                           ,'INR'
+                                           ,'INR'
+                                           ,10000
+                                           ,'NEW'
+                                           ,'IND'
+                                           ,c_vendor.PAN_NUMBER
+                                           );
+            EXCEPTION
+            WHEN OTHERS    THEN
+                lc_error_message:=lc_error_message||'Error while inserting data into supplier interface' ||SQLERRM||', ';
+            END ;
+         END IF;
+         -- +===========================================================================+
+         -- Update the stagging table with Proper error message
+         -- +===========================================================================+
+
+         IF lc_error_message IS NOT NULL THEN
+            UPDATE XXxx_EMP_MIG_TAB
+            SET    error_message       = error_message||lc_error_message
+                  ,processed_flag      = 'E'
+            WHERE trim(FIRST_NAME||' '||MIDDLE_NAME||decode(MIDDLE_NAME,NULL,'',' ')||LAST_NAME) = c_vendor.VENDOR_CODE
+            AND employee_id = c_vendor.employee_id;
+
+         FND_FILE.PUT_LINE(FND_FILE.LOG,c_vendor.VENDOR_CODE||CHR(10)||lc_error_message);
+         END IF;
+      ELSE
+         UPDATE XXxx_EMP_MIG_TAB
+         SET    error_message       = error_message ||'The supplier is available in Oracle, '
+               ,processed_flag      = 'V'
+         WHERE trim(FIRST_NAME||' '||MIDDLE_NAME||decode(MIDDLE_NAME,NULL,'',' ')||LAST_NAME) = c_vendor.VENDOR_CODE
+          AND employee_id = c_vendor.employee_id;
+          --
+          lc_error_message:= lc_error_message||'The supplier is available in Oracle, ';
+
+        FND_FILE.PUT_LINE(FND_FILE.LOG,c_vendor.VENDOR_CODE||CHR(10)||lc_error_message);
+
+      END IF;
+
+      -- +===========================================================================+
+      -- Issue Commit for every 500 records.
+      -- +===========================================================================+
+
+      ln_sup_count := NVL(ln_sup_count,0) + 1;
+      IF ln_sup_count = 500 THEN
+         COMMIT;
+         ln_sup_count := 0;
+      END IF;
+
+   END LOOP;
+   COMMIT;
+   END VALIDATE_VENDOR_RECORDS;
+
+   -- ***************************************************************************
+   -- Procedure/Function Name   :  LOAD_VENDOR_RECORDS
+   --
+   -- Description    :  Load the Vendor Information
+   --
+   -- parameters     :
+   --
+   -- Return/Exit    : <return/exit description>
+   --
+   --
+   -- DEVELOPMENT/MAINTENANCE HISTORY
+   --
+   -- date          author             Version  Description
+   -- ------------  -----------------  -------  --------------------------------
+   --                                   1.0.0    Initial Version
+   -- <date>        <author name>      <ver>    <description>
+   --
+   -- ***************************************************************************
+
+   PROCEDURE LOAD_VENDOR_RECORDS(p_errorbuf OUT VARCHAR2
+                                ,p_retcode  OUT NUMBER)
+   AS
+      l_record_exist                    NUMBER            := 0;
+      l_parent_request_id               NUMBER            := 0;
+      l_child_request_id                NUMBER            := 0;
+      l_child_request_wait              BOOLEAN;
+      l_phase                           VARCHAR2(100);
+      l_status                          VARCHAR2(30);
+      l_dev_phase                       VARCHAR2(100);
+      l_dev_status                      VARCHAR2(100);
+      l_message                         VARCHAR2(50);
+      EX_ERROR_WARNING                  EXCEPTION;
+      EX_CONC_REQUEST_FAILED            EXCEPTION;
+      l_errmsg                          VARCHAR2(4000);
+      l_errcode                         NUMBER;
+   BEGIN
+      l_errcode           := 0;
+      l_errmsg            := NULL;
+      l_parent_request_id := 0;
+      p_retcode           := 0;
+      l_record_exist      := 0;
+
+      l_parent_request_id := FND_GLOBAL.CONC_REQUEST_ID;
+
+      /*
+      UPDATE fnd_concurrent_requests
+      SET    has_sub_request = 'Y'
+      WHERE  request_id      = l_parent_request_id;
+      */
+
+      l_child_request_id := 0;
+
+      -- +===========================================================================+
+      -- Submit the Supplier Import Program
+      -- +===========================================================================+
+      -- fnd_global.APPS_INITIALIZE(1090,50657,200);
+
+      l_child_request_id := FND_REQUEST.SUBMIT_REQUEST(application  => 'SQLAP'
+                                                      ,program      => 'APXSUIMP'
+                                                      ,ARGUMENT1    => 'ALL'
+                                                      ,ARGUMENT2    => '3000'
+                                                      ,ARGUMENT3    => 'N'
+                                                      ,ARGUMENT4    => 'N'
+                                                      ,ARGUMENT5    => 'N');
+      /*
+      UPDATE fnd_concurrent_requests
+      SET    parent_request_id   = l_parent_request_id,
+             priority_request_id = l_parent_request_id,
+             is_sub_request      = 'Y'
+      WHERE  request_id          = l_child_request_id; */
+      dbms_output.put_line('supplier request id'||l_child_request_id);
+
+      COMMIT;
+
+      IF l_child_request_id = 0 THEN
+         RAISE EX_CONC_REQUEST_FAILED;
+      ELSE
+         -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         -- Wait for the child concurrent program to finish...
+         -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         l_child_request_wait := FND_CONCURRENT.WAIT_FOR_REQUEST(request_id => l_child_request_id,
+                                                                 INTERVAL   => 2,
+                                                                 phase      => l_phase,
+                                                                 status     => l_status,
+                                                                 dev_phase  => l_dev_phase,
+                                                                 dev_status => l_dev_status,
+                                                                 message    => l_message);
+
+
+         IF l_status IN ('Error') THEN
+       	    FND_FILE.PUT_LINE(FND_FILE.LOG, 'Supplier Load is not successfull');
+       	    RAISE EX_CONC_REQUEST_FAILED;
+         ELSE
+            IF l_status IN ('Warning') THEN
+               p_retcode := g_warning;
+            END IF;
+
+            FND_FILE.PUT_LINE(FND_FILE.LOG, 'Submitted Supplier Load Program with request id: '||l_child_request_id);
+       	    FND_FILE.PUT_LINE(FND_FILE.LOG, 'Supplier Load Program status.'||l_status);
+         END IF;
+         l_child_request_id := 0;
+      END IF;
+   EXCEPTION
+      WHEN EX_CONC_REQUEST_FAILED THEN
+         p_errorbuf  := 'Error while submitting the Supplier load concurrent request '||SUBSTR(SQLERRM, 1, 500);
+         p_retcode := g_warning;
+         FND_FILE.PUT_LINE(FND_FILE.LOG, p_errorbuf);
+      WHEN OTHERS THEN
+         --FND_FILE.PUT_LINE(FND_FILE.LOG,lc_error_location);
+         p_errorbuf := 'Error -  In supplier load data procedure -- '||SQLERRM;
+         p_retcode   := G_ERROR;
+         FND_FILE.PUT_LINE(FND_FILE.LOG,'Error -  In supplier load data procedure -- '||SQLERRM);
+   END LOAD_VENDOR_RECORDS;
+
+   -- ***************************************************************************
+   -- Procedure/Function Name   :  VALIDATE_VENDOR_SITE_RECORDS
+   --
+   -- Description    :  Supplier Conversion Main Procedure
+   --
+   -- parameters     :
+   --
+   -- Return/Exit    : <return/exit description>
+   --
+   --
+   -- DEVELOPMENT/MAINTENANCE HISTORY
+   --
+   -- date          author             Version  Description
+   -- ------------  -----------------  -------  --------------------------------
+   --                                   1.0.0    Initial Version
+   -- <date>        <author name>      <ver>    <description>
+   --
+   -- ***************************************************************************
+
+   PROCEDURE VALIDATE_VENDOR_SITE_RECORDS(p_validate IN VARCHAR2)
+      AS
+
+      CURSOR cur_vendor_site IS
+      SELECT DISTINCT trim(FIRST_NAME||' '||MIDDLE_NAME||decode(MIDDLE_NAME,NULL,'',' ')||LAST_NAME) VENDOR_CODE,vendor_id,country,org_id,
+      PREPAYMENT_ACCOUNT,LIABILITY_ACCOUNT,employee_id,employee_number
+      FROM   XXxx_EMP_MIG_TAB
+      WHERE  vendor_id is not null
+      ORDER BY vendor_id;
+
+      -- =====================================================
+      --  Cursor to get the Terms ID
+      -- =====================================================
+      CURSOR cur_terms(p_terms_name IN VARCHAR2) IS
+      SELECT term_id
+      FROM   AP_TERMS_TL
+      WHERE  name     = p_terms_name
+      AND    LANGUAGE = USERENV('LANG')
+      AND    SYSDATE  < NVL(end_date_active, SYSDATE+1);
+
+      -- =====================================================
+      --  Cursor to chck the Payment Method Lookup Code
+      -- =====================================================
+      CURSOR cur_pay_method(p_pay_method IN VARCHAR2) IS
+      SELECT payment_method_code
+      FROM   IBY_PAYMENT_METHODS_VL
+      WHERE  UPPER(payment_method_code)  = UPPER(p_pay_method);
+
+      -- =====================================================
+      --  Cursor to chck the Freight Lookup Code
+      -- =====================================================
+      CURSOR cur_freight(p_freight IN VARCHAR2) IS
+      SELECT 1,lookup_code
+      FROM   po_lookup_codes
+      WHERE lookup_type                      = 'FREIGHT TERMS'
+      AND   UPPER(displayed_field)           = UPPER(p_freight)
+      AND   enabled_flag                     = 'Y'
+      AND   NVL (inactive_date, SYSDATE + 1) > SYSDATE;
+
+
+      lc_error_location                 VARCHAR2(1000);
+      ln_temp_var                       NUMBER;
+      ln_count                          NUMBER;
+      lc_error_message                  VARCHAR2(4000);
+      ln_sup_count                      NUMBER;
+      ln_term_id                        NUMBER;
+      lc_pmnt_method_lookup_code        VARCHAR2(30);
+      ld_inactive_date                  DATE;
+      lc_freight_lookup                 VARCHAR2(240);
+      l_liability_account               NUMBER := NULL;
+      l_PREPAYMENT_ACCOUNT                  NUMBER := NULL;
+      ln_org_id                         NUMBER;
+      BEGIN
+      ln_count :=0;
+      FOR c_vendor_sites IN cur_vendor_site LOOP
+         lc_error_message   := NULL;
+         ld_inactive_date   := NULL;
+
+
+            -- +===========================================================================+
+            -- check if Country Code is NULL for site
+            -- +===========================================================================+
+            /*
+            IF c_vendor_sites.country IS NULL THEN
+               lc_error_message  :=lc_error_message||'Country Code should not be NULL, ';
+            END IF;
+           */
+            -- +===========================================================================+
+            -- check if Supplier is Loaded
+            -- +===========================================================================+
+
+            IF c_vendor_sites.vendor_id IS NULL AND NVL(p_validate,'N') = 'N' THEN
+               lc_error_message  :=lc_error_message||'Vendor is not yet loaded, ';
+            END IF;
+            --
+            BEGIN
+              select organization_id
+              INTO ln_org_id
+              from hr_operating_units
+              where organization_id = c_vendor_sites.org_id;
+            exception
+              when others then
+               ln_org_id := NULL;
+             END;
+             --
+             IF ln_org_id IS NULL THEN
+               lc_error_message  :=lc_error_message||'Invalid Organization Id, ';
+             END IF;
+            -- +==================================================================================+
+            -- check if duplicate supplier Site details are there for the same Supplier Site Name.
+            -- +==================================================================================+
+            ln_count :=0;
+            BEGIN
+   	    SELECT COUNT(*)
+   	    INTO   ln_count
+   	    FROM   XXxx_EMP_MIG_TAB
+   	    WHERE  trim(FIRST_NAME||' '||MIDDLE_NAME||decode(MIDDLE_NAME,NULL,'',' ')||LAST_NAME)  = c_vendor_sites.VENDOR_CODE
+   	    AND    org_id            = c_vendor_sites.org_id
+            AND    employee_number   = c_vendor_sites.employee_number
+   	    GROUP BY FIRST_NAME,LAST_NAME,EMPLOYEE_NUMBER,ORG_ID;
+   	    EXCEPTION
+   	    WHEN TOO_MANY_ROWS THEN
+   	      lc_error_message := lc_error_message ||'For the same Supplier Site Name, there are lot of Site details in file, ';
+
+   	    WHEN OTHERS THEN
+   	      lc_error_message   := lc_error_message ||'Others While checking the Supplier Site details for same Supplier Site Name, ';
+   	    END;
+
+         -- +===========================================================================+
+         -- To get prepay account code
+         -- +===========================================================================+
+         /*
+         IF c_vendor_sites.PREPAYMENT_ACCOUNT is not null then
+         BEGIN
+            SELECT gcc.code_combination_id INTO
+            l_PREPAYMENT_ACCOUNT
+            FROM gl_code_combinations_kfv gcc
+            WHERE gcc.CONCATENATED_SEGMENTS = c_vendor_sites.PREPAYMENT_ACCOUNT
+            and gcc.GL_ACCOUNT_TYPE <> 'L';
+            EXCEPTION
+                WHEN OTHERS THEN
+                  l_PREPAYMENT_ACCOUNT := NULL;
+                --  lc_error_message:= lc_error_message||'Invalid PREPAY ACCOUNT, ';
+          END;
+          IF l_PREPAYMENT_ACCOUNT is null then
+            lc_error_message:= lc_error_message||'Invalid PREPAY ACCOUNT, ';
+          END IF;
+         END IF;
+         */
+         -- +===========================================================================+
+         -- To get liability account code
+         -- +===========================================================================+
+          /*
+            if c_vendor_sites.LIABILITY_ACCOUNT is not null then
+
+            BEGIN
+            SELECT gcc.code_combination_id
+            INTO
+            l_liability_account
+            FROM gl_code_combinations_kfv gcc
+            WHERE gcc.CONCATENATED_SEGMENTS = c_vendor_sites.LIABILITY_ACCOUNT
+             AND  gcc.GL_ACCOUNT_TYPE = 'L';
+            EXCEPTION
+                WHEN OTHERS THEN
+                  l_liability_account := NULL;
+                 -- lc_error_message:= lc_error_message||'Invalid LIABILITY ACCOUNT, ';
+           END;
+           --
+           if l_liability_account is null then
+             lc_error_message:= lc_error_message||'Invalid LIABILITY ACCOUNT, ';
+           end if;
+           end if;
+          */
+         -- +===========================================================================+
+         -- check for records existance in Oracle
+         -- +===========================================================================+
+         lc_error_location := 'Before checking records existence in oracle';
+         ln_count          :=0;
+
+         SELECT COUNT(*)
+         INTO   ln_count
+         FROM   po_vendor_sites_all PV
+         WHERE  PV.vendor_id          = c_vendor_sites.vendor_id
+         AND    PV.org_id             = c_vendor_sites.org_id
+         AND    vendor_site_code      = 'OFFICE';
+
+         IF ln_count =0 THEN
+            -- +===========================================================================+
+            -- Load Supplier Site Data into supplier Site interface table
+            -- +===========================================================================+
+
+            IF lc_error_message IS NULL THEN
+   	    BEGIN
+                   INSERT INTO ap_supplier_sites_int
+                         	   (vendor_site_code
+                         	   ,vendor_site_interface_id
+                         	   ,vendor_id
+                         	   ,pay_site_flag
+                         	   ,purchasing_site_flag
+                         	   ,address_line1
+   		                   ,address_line2
+   		                   ,address_line3
+                         	   ,address_line4
+                         	   ,city
+                         	   ,state
+                         	   ,zip
+                         	   ,area_code
+                         	   ,country
+                         	   ,phone
+                                   ,payment_method_lookup_code
+                         	   ,VAT_REGISTRATION_NUM
+                         	   ,hold_all_payments_flag
+                               	   ,org_id
+                                   ,match_option
+                          	   ,terms_id
+                          	   ,offset_tax_flag
+                          	   ,inactive_date
+                          	   ,fax
+                          	   ,email_address
+                          	  -- ,freight_terms_lookup_code
+                                   ,accts_pay_code_combination_id
+                                   ,prepay_code_combination_id
+                                   )
+                           VALUES ('OFFICE'
+                                 ,ap_supplier_sites_int_s.NEXTVAL
+                  	         ,c_vendor_sites.vendor_id
+                  	         ,'Y'
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,NULL
+                  	         ,'IN'
+         	     	         ,NULL
+         	     	         ,NULL
+         	     	         ,NULL
+         	     	         ,NULL
+         	     	         ,nvl(c_vendor_sites.org_id,101)
+         	     	         ,NULL
+         	     	         ,NULL
+         	     	         ,'N'
+         	     	         ,ld_inactive_date
+         	     	         ,NULL
+         	     	         ,NULL
+         	     	         --,lc_freight_lookup
+                                 ,6207
+                                 ,6206
+                                 );
+               EXCEPTION
+               WHEN OTHERS    THEN
+                   lc_error_message:=lc_error_message||'Error while inserting data into supplier Sites interface' ||SQLERRM||', ';
+               END ;
+            END IF;
+            -- +===========================================================================+
+            -- Update the stagging table with Proper error message
+            -- +===========================================================================+
+
+            IF lc_error_message IS NOT NULL THEN
+               UPDATE XXxx_EMP_MIG_TAB
+               SET    error_message       = error_message||lc_error_message
+                     ,processed_flag      = 'E'
+               WHERE vendor_id = c_vendor_sites.vendor_id
+               AND   employee_id = c_vendor_sites.employee_id;
+             commit;
+            FND_FILE.PUT_LINE(FND_FILE.LOG,c_vendor_sites.VENDOR_CODE||' - '||lc_error_message);
+            END IF;
+         ELSE
+            UPDATE XXxx_EMP_MIG_TAB
+            SET    error_message       = error_message ||'The supplier Site is available in Oracle, '
+            WHERE trim(FIRST_NAME||' '||MIDDLE_NAME||decode(MIDDLE_NAME,NULL,'',' ')||LAST_NAME) = c_vendor_sites.VENDOR_CODE
+            AND   employee_id = c_vendor_sites.employee_id;
+           FND_FILE.PUT_LINE(FND_FILE.LOG,c_vendor_sites.VENDOR_CODE||' - '||'The supplier Site is available in Oracle,');
+         END IF;
+
+         -- +===========================================================================+
+         -- Issue Commit for every 500 records.
+         -- +===========================================================================+
+
+         ln_sup_count := NVL(ln_sup_count,0) + 1;
+         IF ln_sup_count = 500 THEN
+            COMMIT;
+            ln_sup_count := 0;
+         END IF;
+
+      END LOOP;
+      COMMIT;
+
+END VALIDATE_VENDOR_SITE_RECORDS;
+
+
+
+   -- ***************************************************************************
+   -- Procedure/Function Name   :  LOAD_VENDOR_SITE_RECORDS
+   --
+   -- Description    :  Load the Vendor Site Information
+   --
+   -- parameters     :
+   --
+   -- Return/Exit    : <return/exit description>
+   --
+   --
+   -- DEVELOPMENT/MAINTENANCE HISTORY
+   --
+   -- date          author             Version  Description
+   -- ------------  -----------------  -------  --------------------------------
+   --                                   1.0.0    Initial Version
+   -- <date>        <author name>      <ver>    <description>
+   --
+   -- ***************************************************************************
+
+   PROCEDURE LOAD_VENDOR_SITE_RECORDS(p_errorbuf OUT VARCHAR2
+                                     ,p_retcode  OUT NUMBER)
+   AS
+      l_record_exist                    NUMBER            := 0;
+      l_parent_request_id               NUMBER            := 0;
+      l_child_request_id                NUMBER            := 0;
+      l_child_request_wait              BOOLEAN;
+      l_phase                           VARCHAR2(100);
+      l_status                          VARCHAR2(30);
+      l_dev_phase                       VARCHAR2(100);
+      l_dev_status                      VARCHAR2(100);
+      l_message                         VARCHAR2(50);
+      EX_ERROR_WARNING                  EXCEPTION;
+      EX_CONC_REQUEST_FAILED            EXCEPTION;
+      l_errmsg                          VARCHAR2(4000);
+      l_errcode                         NUMBER;
+   BEGIN
+      l_errcode           := 0;
+      l_errmsg            := NULL;
+      l_parent_request_id := 0;
+      p_retcode           := 0;
+      l_record_exist      := 0;
+
+      l_parent_request_id := FND_GLOBAL.CONC_REQUEST_ID;
+
+     /* UPDATE fnd_concurrent_requests
+      SET    has_sub_request = 'Y'
+      WHERE  request_id      = l_parent_request_id; */
+
+      l_child_request_id := 0;
+
+      -- +===========================================================================+
+      -- Submit the Supplier Import Program
+      -- +===========================================================================+
+     -- fnd_global.APPS_INITIALIZE(1090,50657,200);
+
+
+      l_child_request_id := FND_REQUEST.SUBMIT_REQUEST(application  => 'SQLAP'
+                                                      ,program      => 'APXSSIMP'
+                                                      ,ARGUMENT1    => 'ALL'
+                                                      ,ARGUMENT2    => '1000'
+                                                      ,ARGUMENT3    => 'N'
+                                                      ,ARGUMENT4    => 'N'
+                                                      ,ARGUMENT5    => 'N');
+
+     dbms_output.put_line('supplier site request id'||l_child_request_id);
+
+   /*   UPDATE fnd_concurrent_requests
+      SET    parent_request_id   = l_parent_request_id,
+             priority_request_id = l_parent_request_id,
+             is_sub_request      = 'Y'
+      WHERE  request_id          = l_child_request_id; */
+
+      COMMIT;
+
+      IF l_child_request_id = 0 THEN
+         RAISE EX_CONC_REQUEST_FAILED;
+      ELSE
+         -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         -- Wait for the child concurrent program to finish...
+         -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         l_child_request_wait := FND_CONCURRENT.WAIT_FOR_REQUEST(request_id => l_child_request_id,
+                                                                 INTERVAL   => 2,
+                                                                 phase      => l_phase,
+                                                                 status     => l_status,
+                                                                 dev_phase  => l_dev_phase,
+                                                                 dev_status => l_dev_status,
+                                                                 message    => l_message);
+
+
+         IF l_status IN ('Error') THEN
+       	    FND_FILE.PUT_LINE(FND_FILE.LOG, 'Supplier Site Load is not successfull');
+       	    RAISE EX_CONC_REQUEST_FAILED;
+         ELSE
+            IF l_status IN ('Warning') THEN
+               p_retcode := g_warning;
+            END IF;
+
+            FND_FILE.PUT_LINE(FND_FILE.LOG, 'Submitted Supplier Site Load Program with request id: '||l_child_request_id);
+       	    FND_FILE.PUT_LINE(FND_FILE.LOG, 'Supplier Site Load Program status.'||l_status);
+         END IF;
+         l_child_request_id := 0;
+      END IF;
+   EXCEPTION
+      WHEN EX_CONC_REQUEST_FAILED THEN
+         p_errorbuf  := 'Error while submitting the Supplier Site load concurrent request '||SUBSTR(SQLERRM, 1, 500);
+         p_retcode := g_warning;
+         FND_FILE.PUT_LINE(FND_FILE.LOG, p_errorbuf);
+      WHEN OTHERS THEN
+        -- FND_FILE.PUT_LINE(FND_FILE.LOG,lc_error_location);
+         p_errorbuf := 'Error -  In supplier site load data procedure -- '||SQLERRM;
+         p_retcode   := G_ERROR;
+         FND_FILE.PUT_LINE(FND_FILE.LOG,'Error -  In supplier site load data procedure -- '||SQLERRM);
+   END LOAD_VENDOR_SITE_RECORDS;
+
+
+   -- ***************************************************************************
+   -- Procedure/Function Name   :  MAIN
+   --
+   -- Description    :  Supplier Conversion Main Procedure
+   --
+   -- parameters     :  p_errbuf       OUT  Error if any in concurrent program
+   --                   p_retcode      OUT  Error Code if any while running the concurrent program
+   --                   p_in_file      IN   Corporate file Name
+   --                   p_file_path    IN   Corporate File Path
+   --                   p_in_file_tv   IN   TV station file Name
+   --                   p_file_path_tv IN   TV Station file Path
+   --                   p_delimiter    IN   Delimiter in the File
+   --                   p_validate     IN   Validate or Load.
+   --
+   -- Return/Exit    : <return/exit description>
+   --
+   --
+   -- DEVELOPMENT/MAINTENANCE HISTORY
+   --
+   -- date          author             Version  Description
+   -- ------------  -----------------  -------  --------------------------------
+   --                                   1.0.0    Initial Version
+   -- <date>        <author name>      <ver>    <description>
+   --
+   -- ***************************************************************************
+
+   PROCEDURE main (p_errbuf       OUT  VARCHAR2,
+                   p_retcode      OUT  VARCHAR2
+                   )
+   AS
+   CURSOR cur_vendor_load
+   IS
+   SELECT * FROM XXxx_EMP_MIG_TAB
+   WHERE error_message IS NOT NULL
+   AND   request_id  = G_REQUEST_ID;
+
+   lc_error_location  VARCHAR2(1000);
+   ln_count           NUMBER;
+   ln_loaded_supp     NUMBER;
+   ln_loaded_sites    NUMBER;
+   ln_loaded_contacts NUMBER;
+   l_default_org_id   NUMBER;
+   l_default_ou_name  VARCHAR2(240);
+   l_ou_count         NUMBER;
+   p_in_file          VARCHAR2(240);
+   p_file_path        VARCHAR2(240);
+   p_delimiter        VARCHAR2(50);
+   p_validate         VARCHAR2(50);
+   x_ret_code VARCHAR2(250);
+   x_err_buf  VARCHAR2(250);
+LV_ERROR_MESSAGE  VARCHAR2(1000);
+
+   BEGIN
+
+      --calling Employee Creation Procedure ----
+
+       Create_Employee;
+       commit;
+       --
+       CREATE_ADDRESS;
+       commit;
+      --
+
+      p_validate := 'N';
+      BEGIN
+         mo_utils.get_default_ou(l_default_org_id, l_default_ou_name, l_ou_count);
+      EXCEPTION
+      WHEN OTHERS THEN
+         l_default_org_id := G_ORG_ID;
+      END;
+
+      mo_global.set_policy_context('S',l_default_org_id);
+
+      -- +=========================================================================================
+      -- Delete the existing record from the interface table.
+      -- +=========================================================================================
+      lc_error_location := 'Before Deleting the existing record from the interface table';
+
+      DELETE FROM ap_suppliers_int where vendor_type_lookup_code = 'EMPLOYEE';
+
+      DELETE FROM ap_supplier_sites_int where vendor_site_code = 'OFFICE';
+
+     -- DELETE FROM ap_sup_site_contact_int;
+
+      -- +=========================================================================================
+      -- Loads data from flat file to staging table
+      -- +=========================================================================================
+      lc_error_location := 'Before Loading the data';
+      --
+      UPDATE XXxx_EMP_MIG_TAB
+      SET request_id = G_REQUEST_ID
+         WHERE  processed_flag IN ('V','E','B');
+      COMMIT;
+
+      -- +=========================================================================================
+      -- Validate the Vendor record and load it.
+      -- +=========================================================================================
+
+      VALIDATE_VENDOR_RECORDS;
+      ln_count := 0;
+
+      SELECT COUNT(*)
+      INTO   ln_count
+      FROM   ap_suppliers_int;
+
+      IF p_validate ='N' AND ln_count > 0 THEN
+
+         LOAD_VENDOR_RECORDS(p_errbuf,p_retcode);
+
+      END IF;
+
+      -- +=========================================================================================
+      -- Update the staging table with Proper Vendor ID
+      -- +=========================================================================================
+
+         UPDATE XXxx_EMP_MIG_TAB xast
+         SET    vendor_id = (SELECT PV.vendor_id
+                             FROM   po_vendors PV
+                             WHERE  pv.employee_id = xast.employee_id
+                             AND    trim(PV.vendor_name) = trim(xast.first_name||' '||xast.last_name));
+        -- WHERE  processed_flag in ('V','S');
+
+         COMMIT;
+
+      -- +=========================================================================================
+      -- Validate the Vendor site record and load it.
+      -- +=========================================================================================
+
+      VALIDATE_VENDOR_SITE_RECORDS(p_validate);
+      ln_count := 0;
+
+      SELECT COUNT(*)
+      INTO   ln_count
+      FROM   ap_supplier_sites_int;
+
+
+      IF p_validate ='N' AND ln_count > 0 THEN
+
+         LOAD_VENDOR_SITE_RECORDS(p_errbuf,p_retcode);
+         --
+      UPDATE XXxx_EMP_MIG_TAB xast
+         SET    Processed_flag='S'
+         WHERE  processed_flag = 'V'
+         AND    vendor_site_id IS NOT NULL;
+         --AND    contact_name   IS NULL;
+
+         COMMIT;
+      END IF;
+         -- +=========================================================================================
+         -- Update the staging table with Proper Vendor Site ID
+         -- +=========================================================================================
+
+         UPDATE XXxx_EMP_MIG_TAB xast
+         SET    vendor_site_id = (SELECT SITE.vendor_site_id
+                                  FROM   po_vendor_sites_all SITE, po_vendors PVS
+                                  WHERE  UPPER(PVS.vendor_id) = xast.vendor_id
+                                  AND    SITE.vendor_id       = PVS.vendor_id
+	                          AND    SITE.org_id          = xast.org_id
+	                          AND    UPPER(SITE.vendor_site_code) ='OFFICE')
+         WHERE  --processed_flag = 'V'
+             vendor_id      IS NOT NULL;
+
+         COMMIT;
+
+      ln_loaded_supp     :=0;
+      ln_loaded_sites    :=0;
+      ln_loaded_contacts :=0;
+
+      -- +=========================================================================================
+      -- Get the Count of loaded suppliers
+      -- +=========================================================================================
+
+      SELECT COUNT( *)
+      INTO   ln_loaded_supp
+      FROM   ap_suppliers_int
+      WHERE  status = 'PROCESSED';
+
+      -- +=========================================================================================
+      -- Get the Count of loaded supplier Sites
+      -- +=========================================================================================
+
+      SELECT COUNT( vendor_site_code)
+      INTO   ln_loaded_sites
+      FROM   ap_supplier_sites_int
+      WHERE  status = 'PROCESSED';
+
+      ln_count := 0;
+
+      -- +=========================================================================================
+      -- Display the Error Message, if there are any errored records
+      -- +=========================================================================================
+
+      SELECT COUNT(*)
+      INTO   ln_count
+      FROM   XXxx_EMP_MIG_TAB
+      WHERE  error_message IS NOT NULL
+      AND    employee_id is not null;
+
+      IF ln_count > 0 THEN
+         FND_FILE.PUT_LINE (FND_FILE.OUTPUT, 'Error Messages: ');
+         FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '===============');
+         FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '');
+         FND_FILE.PUT_LINE (FND_FILE.OUTPUT, RPAD('Supplier Name', 20, ' ') || ' ' || RPAD('Site Name', 20, ' ') || ' '|| RPAD('Error Message',180,' '));
+         FND_FILE.PUT_LINE (FND_FILE.OUTPUT, RPAD('-',20,'-') || ' ' || RPAD('-',20,'-') || ' ' || RPAD('-',180,'-'));
+      END IF;
+
+      -- +=========================================================================================
+      -- Display the Error Message against the supplier sites
+      -- +=========================================================================================
+
+      FOR c_vendor_load IN cur_vendor_load LOOP
+         FND_FILE.PUT_LINE (FND_FILE.OUTPUT, RPAD(c_vendor_load.FIRST_NAME||' '||c_vendor_load.LAST_NAME, 20, ' ')|| ' '|| RPAD(c_vendor_load.error_message,180,' '));
+      END LOOP;
+
+      -- +=========================================================================================
+      -- Display the Summary of loaded data.
+      -- +=========================================================================================
+
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, RPAD('-',20,'-') || ' ' || RPAD('-',20,'-') || ' ' || RPAD('-',180,'-'));
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, 'Summary: ');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '===============');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, 'Number of Suppliers Loaded         : '|| ln_loaded_supp);
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, 'Number of Supplier Site Loaded     : '|| ln_loaded_sites);
+     -- FND_FILE.PUT_LINE (FND_FILE.OUTPUT, 'Number of Contacts loaded          : '|| ln_loaded_contacts);
+      --
+      --
+      --commit;
+
+   END MAIN;
+--
+PROCEDURE  UPDATE_EMPLOYEE(x_ret_code OUT VARCHAR2
+                          ,x_err_buf  OUT VARCHAR2
+                          )
+IS
+
+CURSOR lcu_emp_update
+IS
+SELECT XET.*,XET.rowid row_id
+FROM XXxx_EMP_MIG_TAB XET
+WHERE employee_number is not NULL;
+--
+ln_employee_id  NUMBER;
+x_effective_start_date DATE;
+x_effective_end_date   DATE;
+lv_gender       VARCHAR2(15);
+lv_error_msg    VARCHAR2(2000);
+lv_title        VARCHAR2(10);
+ln_address_id    NUMBER;
+x_addr_obj_version_number NUMBER;
+ln_addr_version_id NUMBER;
+ln_version_no   NUMBER;
+--
+x_applicant_number           VARCHAR2 (100);
+      x_comment_id                 NUMBER;
+      x_current_applicant_flag     VARCHAR2 (250);
+      x_current_emp_or_apl_flag    VARCHAR2 (250);
+      x_full_name                  VARCHAR2 (250);
+      x_npw_number                 VARCHAR2 (250);
+      x_object_version_number      NUMBER;
+      x_object_v_no                VARCHAR2 (250);
+      x_name_combination_warning   BOOLEAN;
+      x_dob_null_warning           BOOLEAN;
+      x_orig_hire_warning          BOOLEAN;
+BEGIN
+   FOR lr_emp_update IN lcu_emp_update LOOP
+     EXIT WHEN lcu_emp_update%NOTFOUND;
+
+     ln_employee_id := 0;
+     lv_error_msg := NULL;
+     --
+     BEGIN
+       SELECT ppf.PERSON_ID
+       INTO ln_employee_id
+       FROM per_all_people_f ppf
+       WHERE ppf.employee_number = lr_emp_update.employee_number;
+     EXCEPTION
+       WHEN OTHERS THEN
+         ln_employee_id := 0;
+     END;
+     --
+     IF ln_employee_id <> 0 THEN
+       BEGIN
+         SELECT ppf.OBJECT_VERSION_NUMBER
+         INTO ln_version_no
+         FROM per_all_people_f ppf
+         WHERE ppf.employee_number = lr_emp_update.employee_number;
+       EXCEPTION
+        WHEN OTHERS THEN
+         ln_version_no := 0;
+       END;
+
+       SELECT decode(initcap(lr_emp_update.title),'Mr','M','Ms','F',initcap(lr_emp_update.title))
+       INTO lv_gender
+       FROM dual;
+             --
+       IF lv_gender <> 'M' AND lv_gender <> 'F' THEN
+         lv_error_msg := lv_error_msg||'gender is Not Valid, ';
+       ELSE
+              lv_title := NULL;
+              BEGIN
+                select decode(lv_gender,'M','MR.','MS.')
+                into lv_title
+                from dual;
+              EXCEPTION
+                when others then
+                lv_title := NULL;
+              END;
+       END IF;
+
+       IF lv_error_msg IS NULL THEN
+       BEGIN
+       per_per_upd.upd
+                    (p_person_id                         => ln_employee_id,
+                     p_effective_start_date              => x_effective_start_date,
+                     p_effective_end_date                => x_effective_end_date,
+                     p_person_type_id                    => 6,
+                     p_last_name                => lr_emp_update.last_name,
+                     p_start_date               => trunc(lr_emp_update.EMPLOYMENT_START_DATE),
+                     p_applicant_number                  => x_applicant_number,
+                     p_comment_id                        => x_comment_id,
+                     p_comments                          => hr_api.g_varchar2,
+                     p_current_applicant_flag            => x_current_applicant_flag,
+                     p_current_emp_or_apl_flag           => x_current_emp_or_apl_flag,
+                     p_current_employee_flag             => x_current_emp_or_apl_flag,
+                     p_date_employee_data_verified       => hr_api.g_date,
+                     p_date_of_birth            => lr_emp_update.DATE_OF_BIRTH,
+                     p_email_address            => lr_emp_update.email_id,
+                     p_employee_number          => lr_emp_update.employee_number,
+                     p_expense_check_send_to_addres      => hr_api.g_varchar2,
+                     p_first_name               => lr_emp_update.FIRST_NAME,
+                     p_full_name                         => x_full_name,
+                     p_known_as                          => hr_api.g_varchar2,
+                     p_marital_status                    => hr_api.g_varchar2,
+                     p_middle_names             => lr_emp_update.middle_name,
+                     p_nationality                       => hr_api.g_varchar2,
+                     p_national_identifier      => lr_emp_update.PAN_NUMBER,
+                     p_previous_last_name                => hr_api.g_varchar2,
+                     p_registered_disabled_flag          => hr_api.g_varchar2,
+                     p_sex                               => lv_gender,
+                     p_title                             => lv_title,
+                     p_vendor_id                         => hr_api.g_number,
+                     p_work_telephone                    => hr_api.g_varchar2,
+                     p_request_id                        => hr_api.g_number,
+                     p_program_application_id            => hr_api.g_number,
+                     p_program_id                        => hr_api.g_number,
+                     p_program_update_date               => hr_api.g_date,
+                     p_attribute_category                => hr_api.g_varchar2,
+                     p_attribute1               => lr_emp_update.bank_name,
+                     p_attribute2               => lr_emp_update.bank_branch,
+                     p_attribute3               => lr_emp_update.bank_account,
+                     p_attribute4               => lr_emp_update.ifsc_code,
+                     p_attribute5               => lr_emp_update.status,
+                     p_attribute6                        => hr_api.g_varchar2,
+                     p_attribute7                        => hr_api.g_varchar2,
+                     p_attribute8                        => hr_api.g_varchar2,
+                     p_attribute9                        => hr_api.g_varchar2,
+                     p_attribute10                       => hr_api.g_varchar2,
+                     p_attribute11                       => hr_api.g_varchar2,
+                     p_attribute12                       => hr_api.g_varchar2,
+                     p_attribute13                       => hr_api.g_varchar2,
+                     p_attribute14                       => hr_api.g_varchar2,
+                     p_attribute15                       => hr_api.g_varchar2,
+                     p_attribute16                       => hr_api.g_varchar2,
+                     p_attribute17                       => hr_api.g_varchar2,
+                     p_attribute18                       => hr_api.g_varchar2,
+                     p_attribute19                       => hr_api.g_varchar2,
+                     p_attribute20                       => hr_api.g_varchar2,
+                     p_attribute21                       => hr_api.g_varchar2,
+                     p_attribute22                       => hr_api.g_varchar2,
+                     p_attribute23                       => hr_api.g_varchar2,
+                     p_attribute24                       => hr_api.g_varchar2,
+                     p_attribute25                       => hr_api.g_varchar2,
+                     p_attribute26                       => hr_api.g_varchar2,
+                     p_attribute27                       => hr_api.g_varchar2,
+                     p_attribute28                       => hr_api.g_varchar2,
+                     p_attribute29                       => hr_api.g_varchar2,
+                     p_attribute30                       => hr_api.g_varchar2,
+                     p_per_information_category          => hr_api.g_varchar2,
+                     p_per_information1                  => hr_api.g_varchar2,
+                     p_per_information2                  => hr_api.g_varchar2,
+                     p_per_information3                  => hr_api.g_varchar2,
+                     p_per_information4                  => hr_api.g_varchar2,
+                     p_per_information5                  => hr_api.g_varchar2,
+                     p_per_information6                  => hr_api.g_varchar2,
+                     p_per_information7                  => hr_api.g_varchar2,
+                     p_per_information8                  => hr_api.g_varchar2,
+                     p_per_information9                  => hr_api.g_varchar2,
+                     p_per_information10                 => hr_api.g_varchar2,
+                     p_per_information11                 => hr_api.g_varchar2,
+                     p_per_information12                 => hr_api.g_varchar2,
+                     p_per_information13                 => hr_api.g_varchar2,
+                     p_per_information14                 => hr_api.g_varchar2,
+                     p_per_information15                 => hr_api.g_varchar2,
+                     p_per_information16                 => hr_api.g_varchar2,
+                     p_per_information17                 => hr_api.g_varchar2,
+                     p_per_information18                 => hr_api.g_varchar2,
+                     p_per_information19                 => hr_api.g_varchar2,
+                     p_per_information20                 => hr_api.g_varchar2,
+                     p_suffix                            => hr_api.g_varchar2,
+                     p_date_of_death                     => hr_api.g_date,
+                     p_background_check_status           => hr_api.g_varchar2,
+                     p_background_date_check             => hr_api.g_date,
+                     p_blood_type                        => hr_api.g_varchar2,
+                     p_correspondence_language           => hr_api.g_varchar2,
+                     p_fast_path_employee                => hr_api.g_varchar2,
+                     p_fte_capacity                      => hr_api.g_number,
+                     p_hold_applicant_date_until         => hr_api.g_date,
+                     p_honors                            => hr_api.g_varchar2,
+                     p_internal_location                 => hr_api.g_varchar2,
+                     p_last_medical_test_by              => hr_api.g_varchar2,
+                     p_last_medical_test_date            => hr_api.g_date,
+                     p_mailstop                          => hr_api.g_varchar2,
+                     p_office_number                     => hr_api.g_varchar2,
+                     p_on_military_service               => hr_api.g_varchar2,
+                     p_order_name                        => hr_api.g_varchar2,
+                     p_pre_name_adjunct                  => hr_api.g_varchar2,
+                     p_projected_start_date              => hr_api.g_date,
+                     p_rehire_authorizor                 => hr_api.g_varchar2,
+                     p_rehire_recommendation             => hr_api.g_varchar2,
+                     p_resume_exists                     => hr_api.g_varchar2,
+                     p_resume_last_updated               => hr_api.g_date,
+                     p_second_passport_exists            => hr_api.g_varchar2,
+                     p_student_status                    => hr_api.g_varchar2,
+                     p_work_schedule                     => hr_api.g_varchar2,
+                     p_per_information21                 => hr_api.g_varchar2,
+                     p_per_information22                 => hr_api.g_varchar2,
+                     p_per_information23                 => hr_api.g_varchar2,
+                     p_per_information24                 => hr_api.g_varchar2,
+                     p_per_information25                 => hr_api.g_varchar2,
+                     p_per_information26                 => hr_api.g_varchar2,
+                     p_per_information27                 => hr_api.g_varchar2,
+                     p_per_information28                 => hr_api.g_varchar2,
+                     p_per_information29                 => hr_api.g_varchar2,
+                     p_per_information30                 => hr_api.g_varchar2,
+                     p_rehire_reason                     => hr_api.g_varchar2,
+                     p_benefit_group_id                  => hr_api.g_number,
+                     p_receipt_of_death_cert_date        => hr_api.g_date,
+                     p_coord_ben_med_pln_no              => hr_api.g_varchar2,
+                     p_coord_ben_no_cvg_flag             => hr_api.g_varchar2,
+                     p_coord_ben_med_ext_er              => hr_api.g_varchar2,
+                     p_coord_ben_med_pl_name             => hr_api.g_varchar2,
+                     p_coord_ben_med_insr_crr_name       => hr_api.g_varchar2,
+                     p_coord_ben_med_insr_crr_ident      => hr_api.g_varchar2,
+                     p_coord_ben_med_cvg_strt_dt         => hr_api.g_date,
+                     p_coord_ben_med_cvg_end_dt          => hr_api.g_date,
+                     p_uses_tobacco_flag                 => hr_api.g_varchar2,
+                     p_dpdnt_adoption_date               => hr_api.g_date,
+                     p_dpdnt_vlntry_svce_flag            => hr_api.g_varchar2,
+                     p_original_date_of_hire             => hr_api.g_date,
+                     p_town_of_birth                     => hr_api.g_varchar2,
+                     p_region_of_birth                   => hr_api.g_varchar2,
+                     p_country_of_birth                  => hr_api.g_varchar2,
+                     p_global_person_id                  => hr_api.g_varchar2,
+                     p_party_id                          => hr_api.g_number,
+                     p_npw_number                        => x_npw_number,
+                     p_current_npw_flag                  => hr_api.g_varchar2,
+                     p_object_version_number             => ln_version_no,
+                     p_effective_date                    => trunc(lr_emp_update.EMPLOYEE_END_DATE),
+                     p_datetrack_mode                    => 'CORRECTION',
+                     p_validate                          => FALSE,
+                     p_name_combination_warning          => x_name_combination_warning,
+                     p_dob_null_warning                  => x_dob_null_warning,
+                     p_orig_hire_warning                 => x_orig_hire_warning
+                    );
+
+        COMMIT;
+       EXCEPTION
+         WHEN OTHERS THEN
+         FND_FILE.PUT_LINE(FND_FILE.LOG,lr_emp_update.FIRST_NAME||' '||lr_emp_update.LAST_NAME||'- '||'Exception while Updating Employee -'||SQLERRM);
+       END;
+       --
+       FND_FILE.PUT_LINE(FND_FILE.LOG,lr_emp_update.FIRST_NAME||' '||lr_emp_update.LAST_NAME||'- '||'Information Updated');
+       ELSE
+       FND_FILE.PUT_LINE(FND_FILE.LOG,lr_emp_update.FIRST_NAME||' '||lr_emp_update.LAST_NAME||'- '||lv_error_msg);
+       END IF;
+       --
+       ELSE
+         UPDATE XXxx_EMP_MIG_TAB XET
+         SET XET.error_message = XET.error_message||'Employee Number does not exist, '
+         WHERE XET.rowid   = lr_emp_update.row_id;
+        FND_FILE.PUT_LINE(FND_FILE.LOG,lr_emp_update.FIRST_NAME||' '||lr_emp_update.LAST_NAME||' - Employee Number does not exist');
+       END IF;
+      --
+      COMMIT;
+   END LOOP;
+   --
+   FOR lr_emp_addr_update IN lcu_emp_update LOOP
+     EXIT WHEN lcu_emp_update%NOTFOUND;
+      BEGIN
+        SELECT pa.ADDRESS_ID
+        INTO ln_address_id
+        FROM PER_ALL_PEOPLE_F ppf
+            ,PER_ADDRESSES pa
+        WHERE pa.person_id = ppf.person_id
+        AND   ppf.employee_number = lr_emp_addr_update.employee_number
+        AND   trim(pa.address_line1)    = trim(lr_emp_addr_update.address_line1);
+      EXCEPTION
+       WHEN OTHERS THEN
+         ln_address_id := 0;
+      END;
+      --
+      IF ln_address_id <> 0 THEN
+
+       BEGIN
+        SELECT pa.OBJECT_VERSION_NUMBER
+        INTO ln_addr_version_id
+        FROM PER_ALL_PEOPLE_F ppf
+            ,PER_ADDRESSES pa
+        WHERE pa.person_id = ppf.person_id
+        AND   ppf.employee_number = lr_emp_addr_update.employee_number
+        AND   trim(pa.address_line1)    = trim(lr_emp_addr_update.address_line1);
+      EXCEPTION
+       WHEN OTHERS THEN
+         ln_addr_version_id := 0;
+      END;
+
+       BEGIN
+ hr_person_address_api.update_person_address(p_effective_date          => lr_emp_addr_update.EMPLOYEE_END_DATE
+                             ,p_address_id              => ln_address_id
+                             ,p_object_version_number   => ln_addr_version_id
+                             --,p_date_from
+                             --,p_date_to                       in     date     default hr_api.g_date
+                             --,p_primary_flag		      in     varchar2 default hr_api.g_varchar2
+                             --,p_address_type                  in     varchar2 default hr_api.g_varchar2
+                             ,p_address_line1        => lr_emp_addr_update.address_line1
+                             ,p_address_line2        => lr_emp_addr_update.address_line2
+                             ,p_address_line3        => lr_emp_addr_update.address_line3
+                             ,p_postal_code          => lr_emp_addr_update.pincode
+                             );
+       COMMIT;
+       --
+       EXCEPTION
+         WHEN OTHERS THEN
+          FND_FILE.PUT_LINE(FND_FILE.LOG,lr_emp_addr_update.FIRST_NAME||' '||lr_emp_addr_update.LAST_NAME||'- '||'Exception while Updating Address -'||SQLERRM);
+      END;
+      FND_FILE.PUT_LINE(FND_FILE.LOG,lr_emp_addr_update.FIRST_NAME||' '||lr_emp_addr_update.LAST_NAME||'- '||'Address Information Updated');
+
+     ELSE
+       FND_FILE.PUT_LINE(FND_FILE.LOG,lr_emp_addr_update.FIRST_NAME||' '||lr_emp_addr_update.LAST_NAME||'- '||'Addresss not found for Updation');
+     END IF;
+  END LOOP;
+END UPDATE_EMPLOYEE;
+
+END XXxx_EMPLOYEE_SUPPLIER_MIG;
+/
+
+
+
+
+
+
+
+DROP TABLE APPS.XXxx_EMP_MIG_TAB CASCADE CONSTRAINTS;
+
+CREATE TABLE APPS.XXxx_EMP_MIG_TAB
+(
+  EMPLOYEE_NUMBER          VARCHAR2(30 BYTE),
+  LAST_NAME                VARCHAR2(150 BYTE),
+  FIRST_NAME               VARCHAR2(150 BYTE),
+  MIDDLE_NAME              VARCHAR2(60 BYTE),
+  TITLE                    VARCHAR2(30 BYTE),
+  DATE_OF_BIRTH            DATE,
+  GENDER                   VARCHAR2(30 BYTE),
+  JOB                      VARCHAR2(250 BYTE),
+  GRADE                    VARCHAR2(250 BYTE),
+  SUPERVISOR_NAME          VARCHAR2(250 BYTE),
+  SET_OF_BOOKS             VARCHAR2(250 BYTE),
+  DEFAULT_EXPENSE_ACCOUNT  VARCHAR2(250 BYTE),
+  OFFICE                   VARCHAR2(250 BYTE),
+  BANK_NAME                VARCHAR2(150 BYTE),
+  BANK_BRANCH              VARCHAR2(150 BYTE),
+  BANK_ACCOUNT             VARCHAR2(150 BYTE),
+  DATE_OF_JOINING          DATE,
+  EMAIL_ID                 VARCHAR2(250 BYTE),
+  PAYMENT_METHOD_CODE      VARCHAR2(250 BYTE),
+  PAY_GROUP                VARCHAR2(250 BYTE),
+  PREPAYMENT_ACCOUNT       VARCHAR2(250 BYTE),
+  LIABILITY_ACCOUNT        VARCHAR2(250 BYTE),
+  PAN_NUMBER               VARCHAR2(50 BYTE),
+  IFSC_CODE                VARCHAR2(150 BYTE),
+  LEDGER                   VARCHAR2(250 BYTE),
+  ORGANIZATION             VARCHAR2(250 BYTE),
+  COUNTRY                  VARCHAR2(100 BYTE),
+  STATUS                   VARCHAR2(150 BYTE),
+  EMPLOYMENT_START_DATE    DATE,
+  EMPLOYEE_END_DATE        DATE,
+  STYLE                    VARCHAR2(250 BYTE),
+  ADDRESS                  VARCHAR2(240 BYTE),
+  ASSIGNMENT_NUMBER        VARCHAR2(240 BYTE),
+  POSITION                 VARCHAR2(240 BYTE),
+  SUPPLIER_STATUS          VARCHAR2(240 BYTE),
+  INACTIVE_DATE            DATE,
+  U_NFLAG                  VARCHAR2(240 BYTE),
+  MOBILE_NUMBER            VARCHAR2(50 BYTE),
+  FFS_MONTH                VARCHAR2(25 BYTE),
+  FFS_YEAR                 VARCHAR2(25 BYTE),
+  EMPLOYEE_ID              NUMBER,
+  VENDOR_ID                NUMBER,
+  VENDOR_SITE_ID           NUMBER,
+  PROCESSED_FLAG           VARCHAR2(50 BYTE),
+  ERROR_MESSAGE            VARCHAR2(2000 BYTE),
+  ORG_ID                   NUMBER,
+  REQUEST_ID               NUMBER,
+  ADDRESS_LINE1            VARCHAR2(100 BYTE),
+  ADDRESS_LINE2            VARCHAR2(150 BYTE),
+  ADDRESS_LINE3            VARCHAR2(150 BYTE),
+  ADDRESS_LINE4            VARCHAR2(150 BYTE),
+  CITY                     VARCHAR2(60 BYTE),
+  PINCODE                  VARCHAR2(60 BYTE),
+  ADDRESS_ID               NUMBER(15),
+  STATE                    VARCHAR2(100 BYTE),
+  BRANCH_CODE              VARCHAR2(100 BYTE),
+  DEPARTMENT_CODE          VARCHAR2(100 BYTE),
+  DESIGNATION              VARCHAR2(240 BYTE),
+  GROUP_JOIN_DATE          DATE
+)
+TABLESPACE APPS_TS_TX_DATA
+PCTUSED    0
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          128K
+            NEXT             128K
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE
+NOPARALLEL
+MONITORING;
+
