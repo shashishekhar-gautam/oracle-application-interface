@@ -26,7 +26,7 @@ CREATE OR REPLACE PACKAGE "xx_THIRD_PRTY_ORDR"  AS
 --   <<EXECUTABLE NAME>>       CONC PROG EXEC           SQL FILE | STORE PROCEDURE ETC
 --
 -- HISTORY      : DDMONYYYY   NAME            	  				   		 		   	  	   		 		  COMMENT
---                23JUNE2009  SHASHI SHEKHAR GAUTAM (READING AND MAPPING ORDER FILES FROM DIFFERENT SOURCES)           				 		 FINAL CODING
+--                   SHASHI SHEKHAR GAUTAM (READING AND MAPPING ORDER FILES FROM DIFFERENT SOURCES)           				 		 FINAL CODING
 --		  
 -- VERSION CONTROL HISTORY:
 -- $LOG$
@@ -143,7 +143,7 @@ CREATE OR REPLACE PACKAGE BODY "xx_THIRD_PRTY_ORDR" AS
 --   <<EXECUTABLE NAME>>       CONC PROG EXEC           SQL FILE | STORE PROCEDURE ETC
 --
 -- HISTORY      : DDMONYYYY   NAME            	  		COMMENT
---                23JUNE2009  SHASHI SHEKHAR GAUTAM (READING  AND MAPPING ORDER FILES FROM DIFFERENT SOURCES INTO STAGING)          FINAL CODING
+--                SHASHI SHEKHAR GAUTAM (READING  AND MAPPING ORDER FILES FROM DIFFERENT SOURCES INTO STAGING)          FINAL CODING
 --
 -- VERSION CONTROL HISTORY:
 -- $LOG$
@@ -1697,7 +1697,7 @@ IS
 -- Procedure Name: xx_ORDER_CREATION_VALIDATIONS
 -- Purpose: To Check existing Or New Customer, For New customer create Customer
 --  		 For Existing Customer If site is not present then create new site
--- Code Added On 21-AUG-2009   Prakash Raut
+--  
 -- ==================================================================================================================
 
 CURSOR C IS
@@ -2584,8 +2584,7 @@ PROCEDURE xx_DATA_FEED_OUTBOUND(ERRBUF VARCHAR2,RETCODE VARCHAR2,P_N IN VARCHAR2
 **   xx Third Party Outbound Exec       Conc Prog Exec        PL/SQL Stored Procedure
 **
 ** History      : DD-MON-YYYY  Name                          Comment
-**                24-SEP-2009  VIBHOOTI BHUSHAN SHUKLA        Final Coding & Data Inserted In To Mapping Table According To Scritp.
-**                24-SEP-2009  VINOD DWIVEDI                  Final Coding & Data Check Up According To Different Conditions .
+**           
 **
 ** Version Control History:
 ** $Log$
