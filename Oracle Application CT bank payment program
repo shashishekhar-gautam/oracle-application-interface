@@ -1,0 +1,283 @@
+CREATE OR REPLACE PROCEDURE APPS.xxxx_xx_bank_report(x_err_buf  OUT VARCHAR2
+                                                        ,x_ret_code OUT VARCHAR2
+                                                        ,p_check_date IN VARCHAR2
+                                                        ,p_bank_account IN VARCHAR2
+                                                        ,p_paycheck_run IN VARCHAR2
+                                                        )
+AS
+CURSOR lcu_fetch_master
+IS
+SELECT  nvl(povsa.vendor_site_code_alt,pv.vendor_name) vendor_name
+       ,povsa.address_line1
+       ,povsa.address_line2
+       ,povsa.address_line3
+       ,povsa.city
+       ,povsa.zip zip
+       ,apc.check_number
+       ,TO_CHAR(apc.check_date,'DD/MM/YYYY') check_date
+       ,apc.amount
+       ,pv.segment1
+      ,ipab.bank_name
+      ,ipab.account_number
+      ,apc.check_id,apc.vendor_site_id
+FROM ap_checks_all apc
+    ,po_vendors pv
+    ,po_vendor_sites_all povsa
+    ,IBY_PAYEE_ASSIGNED_BANKACCT_V ipab
+WHERE apc.vendor_id = pv.vendor_id
+AND   pv.vendor_id   = povsa.vendor_id
+AND   apc.vendor_site_id = povsa.vendor_site_id
+AND   pv.party_id  =  ipab.party_id(+)
+AND   nvl2(ipab.party_id,order_of_preference,1)= nvl2(ipab.party_id,1,1)
+AND   apc.STATUS_LOOKUP_CODE <> 'VOIDED'
+AND   (nvl2(ipab.party_id,ipab.SUPPLIER_SITE_ID,1)= nvl2(ipab.party_id,povsa.vendor_site_id,1) OR ipab.SUPPLIER_SITE_ID IS NULL)
+AND   (pv.vendor_type_lookup_code <> 'EMPLOYEE' or (pv.vendor_type_lookup_code is null))
+AND   apc.checkrun_name = p_paycheck_run
+AND  apc.check_id in (select aip.check_id
+                          from ap_invoice_payments_all aip
+                              ,ap_invoices_all aia
+                          where aia.invoice_id = aip.invoice_id
+                           and  aia.attribute5 is not null
+                           and aia.source NOT like 'TERS%'
+                           and aia.source NOT like 'EERS%')
+union
+SELECT  nvl(povsa.vendor_site_code_alt,pv.vendor_name) vendor_name
+       ,povsa.address_line1
+       ,povsa.address_line2
+       ,povsa.address_line3
+       ,povsa.city
+       ,povsa.zip zip
+       ,apc.check_number
+       ,TO_CHAR(apc.check_date,'DD/MM/YYYY') check_date
+       ,apc.amount
+       ,pv.segment1
+       ,paf.attribute1 bank_name
+       ,paf.attribute3 account_number
+       ,apc.check_id,apc.vendor_site_id
+FROM ap_checks_all apc
+    ,po_vendors pv
+    ,po_vendor_sites_all povsa
+    ,per_all_people_f paf
+WHERE apc.vendor_id = pv.vendor_id
+AND   pv.vendor_id   = povsa.vendor_id
+AND   apc.vendor_site_id = povsa.vendor_site_id
+AND   pv.employee_id  =  paf.person_id
+AND   apc.STATUS_LOOKUP_CODE <> 'VOIDED'
+AND   pv.vendor_type_lookup_code = 'EMPLOYEE'
+AND   apc.checkrun_name = p_paycheck_run
+AND   apc.check_id in (select aip.check_id
+                      from ap_invoice_payments_all aip
+                          ,ap_invoices_all aia
+                      where aia.invoice_id = aip.invoice_id
+                       and  aia.attribute5 is not null
+                       and aia.source NOT like 'TERS%'
+                       and aia.source NOT like 'EERS%')
+ORDER BY 7;
+
+--
+CURSOR lcu_fetch_detail(p_check_id IN NUMBER)
+IS
+SELECT aia.invoice_num
+      ,DECODE(INSTR(aia.invoice_num,'-TDS-'),0,aia.attribute4,NULL) TPV_INV_NUM
+      ,aia.description line_description
+      --,ail.attribute1 employee_name
+      ,ABS(aip.amount)  pay_amt
+      ,DECODE(SIGN(aia.invoice_amount),-1,'C','D') TYPE
+FROM ap_invoices_all aia
+    --,ap_invoice_lines_all ail
+    ,ap_invoice_payments_all aip
+WHERE aia.invoice_id = aip.invoice_id
+AND   aia.org_id     = aip.org_id
+AND   aip.check_id   = p_check_id
+ORDER BY 1;
+lv_vendor_dtls   VARCHAR2(4000);
+lv_invoice_dtls  VARCHAR2(4000);
+ln_check_sl_no  NUMBER := 0;
+ln_inv_count    NUMBER := 0;
+lv_inv_line_no  NUMBER;
+ln_pay_amt  NUMBER(20,2);
+ln_check_count NUMBER;
+ln_check_amount NUMBER;
+LV_HEAD   VARCHAR2(1000);
+LV_TAIL   VARCHAR2(500);
+lv_branch_code  VARCHAR2(200);
+ln_file_count   NUMBER;
+lc_duplicate_check VARCHAR2(255);
+
+BEGIN
+   BEGIN
+     SELECT file_name
+     INTO lc_duplicate_check
+     FROM xxxx_duplicate_file_check
+     WHERE file_name = p_paycheck_run
+     AND source = 'PAYMENT';
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+         lc_duplicate_check := NULL;
+      WHEN OTHERS THEN
+         lc_duplicate_check := 'XAV';
+   END;
+   --
+   IF lc_duplicate_check IS NULL THEN
+
+   BEGIN
+     SELECT COUNT(*)
+     INTO ln_check_count
+     FROM AP_CHECKS_ALL
+     WHERE STATUS_LOOKUP_CODE <> 'VOIDED'
+     AND   checkrun_name = p_paycheck_run
+     and check_id in (select aip.check_id
+                          from ap_invoice_payments_all aip
+                              ,ap_invoices_all aia
+                          where aia.invoice_id = aip.invoice_id
+                          and  aia.attribute5 is not null
+                          and aia.source NOT like 'TERS%'
+                          and aia.source NOT like 'EERS%');
+   EXCEPTION
+     WHEN OTHERS THEN
+       ln_check_count := 0;
+   END;
+   --
+   BEGIN
+     SELECT SUM(AMOUNT)
+     INTO ln_check_amount
+     FROM AP_CHECKS_ALL
+     WHERE STATUS_LOOKUP_CODE <> 'VOIDED'
+     AND checkrun_name = p_paycheck_run
+     and check_id in (select aip.check_id
+                          from ap_invoice_payments_all aip
+                              ,ap_invoices_all aia
+                          where aia.invoice_id = aip.invoice_id
+                          and  aia.attribute5 is not null
+                          and aia.source NOT like 'TERS%'
+                          and aia.source NOT like 'EERS%');
+   EXCEPTION
+     WHEN OTHERS THEN
+       ln_check_amount := 0;
+   END;
+    BEGIN
+     SELECT COUNT(*)
+     INTO ln_file_count
+     FROM FND_CONC_REQ_SUMMARY_V FCR
+         ,FND_CONCURRENT_PROGRAMS_VL FCP
+     WHERE FCR.CONCURRENT_PROGRAM_ID = FCP.CONCURRENT_PROGRAM_ID
+     AND FCP.CONCURRENT_PROGRAM_NAME = 'xxxxBANKFM'
+     AND TRUNC(REQUEST_DATE) = TRUNC(SYSDATE);
+    EXCEPTION
+     WHEN OTHERS THEN
+       ln_file_count := 0;
+    END;
+
+   FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'HBSIC'||TO_CHAR(SYSDATE,'DDMM')||'.'||LPAD(ln_file_count,3,0)||RPAD('BSIC',length('BSIC')+16));
+   --
+   BEGIN
+     SELECT RPAD('P'||TO_CHAR(SYSDATE,'DD/MM/YYYY'),LENGTH('P'||TO_CHAR(SYSDATE,'DD/MM/YYYY'))+21)
+               ||RPAD(LPAD(ln_check_count,5,0)||LPAD(TRIM(TO_CHAR(ln_check_amount,'999999999999.99')),20,0),LENGTH(LPAD(ln_check_count,5,0)||LPAD(TRIM(TO_CHAR(ln_check_amount,'999999999999.99')),20,0))+20)
+           ,'T'||LPAD(ln_check_count,5,0)||LPAD(TRIM(TO_CHAR(ln_check_amount,'999999999999.99')),20,0)
+     INTO LV_HEAD,LV_TAIL
+     FROM DUAL;
+
+   EXCEPTION
+     WHEN OTHERS THEN
+       LV_HEAD := NULL;
+       LV_TAIL := NULL;
+   END;
+
+   FND_FILE.PUT_LINE(FND_FILE.OUTPUT,LV_HEAD);
+   --
+   FOR lr_fetch_master IN lcu_fetch_master
+   LOOP
+     ln_check_sl_no := ln_check_sl_no+1;
+     lv_inv_line_no := 0;
+     --
+     BEGIN
+       SELECT COUNT(*)
+       INTO ln_inv_count
+       FROM ap_invoice_payments_all
+       WHERE check_id = lr_fetch_master.check_id;
+     EXCEPTION
+       WHEN OTHERS THEN
+         ln_inv_count := 0;
+     END;
+     --
+     BEGIN
+        SELECT   DISTINCT aia.attribute5 branch_code
+        INTO lv_branch_code
+        FROM ap_invoice_payments_all aip
+                   ,ap_checks_all apc
+                   ,ap_invoices_all aia
+       WHERE apc.check_id = aip.check_id
+       AND   aip.invoice_id = aia.invoice_id
+       AND   apc.STATUS_LOOKUP_CODE <> 'VOIDED'
+       AND  aia.attribute5 is not null
+       AND  apc.check_id = lr_fetch_master.check_id;
+     EXCEPTION
+        WHEN OTHERS THEN
+            lv_branch_code  := NULL;
+      END;
+     --
+     BEGIN
+     SELECT 'IC'||RPAD(SUBSTR(LPAD(lr_fetch_master.vendor_name,(LENGTH(lr_fetch_master.vendor_name)+15)),1,60),(LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,45))+(60-LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,45)))))
+                ||RPAD(SUBSTR((lr_fetch_master.address_line1||', '||lr_fetch_master.address_line2),1,34)
+              ,(LENGTH(SUBSTR((lr_fetch_master.address_line1||', '||lr_fetch_master.address_line2),1,34))+(35-LENGTH(SUBSTR((lr_fetch_master.address_line1||', '||lr_fetch_master.address_line2),1,34)))))
+               ||RPAD(SUBSTR(nvl(lr_fetch_master.address_line3,'-'),1,35)
+              ,(LENGTH(SUBSTR(nvl(lr_fetch_master.address_line3,'-'),1,35))+(35-LENGTH(SUBSTR(nvl(lr_fetch_master.address_line3,'-'),1,35)))))
+            ||RPAD(SUBSTR(lr_fetch_master.city||'-'||lr_fetch_master.zip,1,35),(LENGTH(SUBSTR(lr_fetch_master.city||'-'||lr_fetch_master.zip,1,35))+(35-LENGTH(SUBSTR(lr_fetch_master.city||'-'||lr_fetch_master.zip,1,35)))+DECODE(lr_fetch_master.zip,null,35,0)))
+            ||RPAD(substr(lr_fetch_master.zip,1,35),(length(substr(lr_fetch_master.zip,1,35))+(35-length(substr(lr_fetch_master.zip,1,35)))))
+            ||RPAD('-',(20+DECODE(lr_fetch_master.account_number,NULL,85,decode(lr_fetch_master.bank_name,NULL,25,0))))
+            ||RPAD(SUBSTR(lr_fetch_master.bank_name,1,25),(LENGTH(SUBSTR(lr_fetch_master.bank_name,1,25))+(25-LENGTH(SUBSTR(lr_fetch_master.bank_name,1,25)))))
+            ||RPAD(SUBSTR(lr_fetch_master.account_number,1,60),(LENGTH(SUBSTR(lr_fetch_master.account_number,1,60))+(60-LENGTH(SUBSTR(lr_fetch_master.account_number,1,60)))))
+                  ||RPAD(SUBSTR(lr_fetch_master.vendor_name,1,80),(LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,80))+(80-LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,80)))))
+                  ||RPAD(SUBSTR(lr_fetch_master.check_number,1,15),(LENGTH(SUBSTR(lr_fetch_master.check_number,1,15))+(15-LENGTH(SUBSTR(lr_fetch_master.check_number,1,15)))))
+                ||RPAD(SUBSTR(lr_fetch_master.check_date||LPAD(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')),(LENGTH(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')))+20-LENGTH(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')))),0),1,40)
+                        ,(LENGTH(SUBSTR(lr_fetch_master.check_date||LPAD(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')),(LENGTH(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')))+20-LENGTH(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')))),0),1,40))+(40-LENGTH(SUBSTR(lr_fetch_master.check_date||LPAD(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')),(LENGTH(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')))+20-LENGTH(trim(TO_CHAR(ABS(lr_fetch_master.amount),'99999999999.99')))),0),1,40)))))
+                  ||RPAD(SUBSTR(lr_fetch_master.segment1,1,90),(LENGTH(SUBSTR(lr_fetch_master.segment1,1,90))+(90-LENGTH(SUBSTR(lr_fetch_master.segment1,1,90)))))
+                  ||RPAD(SUBSTR(lr_fetch_master.vendor_name,1,250),(LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,250))+(250-LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,250)))))
+                  ||RPAD(SUBSTR(ln_check_sl_no,1,50),(LENGTH(SUBSTR(ln_check_sl_no,1,50))+(50-LENGTH(SUBSTR(ln_check_sl_no,1,50)))))
+                      ||RPAD(ln_inv_count,LENGTH(ln_inv_count)+(5-LENGTH(ln_inv_count)))||RPAD(lv_branch_code,length(lv_branch_code)+(15-length(lv_branch_code)))
+     INTO lv_vendor_dtls
+     FROM DUAL;
+     EXCEPTION
+      WHEN OTHERS THEN
+       lv_vendor_dtls := NULL;
+     END;
+    IF lv_branch_code IS NOT NULL THEN
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,lv_vendor_dtls);
+    --
+    FOR  lr_fetch_detail IN lcu_fetch_detail(lr_fetch_master.check_id)
+     LOOP
+        lv_inv_line_no := lv_inv_line_no+1;
+        ln_pay_amt := lr_fetch_detail.pay_amt;
+        BEGIN
+           SELECT 'A'||ln_check_sl_no
+            ||RPAD(SUBSTR(LPAD(lv_inv_line_no,(LENGTH(lv_inv_line_no)+50+(CASE WHEN LENGTH(ln_check_sl_no) >=2 THEN (1-LENGTH(ln_check_sl_no)) ELSE 0 END))),1,54),(LENGTH(SUBSTR(lv_inv_line_no,1,54))+(54-LENGTH(SUBSTR(lv_inv_line_no,1,54))+(CASE WHEN LENGTH(ln_check_sl_no) >=2 THEN (1-LENGTH(ln_check_sl_no)) ELSE 0 END))
+            + DECODE(lr_fetch_detail.TPV_INV_NUM,NULL,(16+(CASE WHEN LENGTH(ln_check_sl_no) >=2 THEN 0 ELSE 0 END)),0)))
+            ||RPAD(SUBSTR(lr_fetch_detail.TPV_INV_NUM,1,15),(LENGTH(SUBSTR(lr_fetch_detail.TPV_INV_NUM,1,15))+(16-LENGTH(SUBSTR(lr_fetch_detail.TPV_INV_NUM,1,15))+((CASE WHEN LENGTH(ln_check_sl_no) >=2 THEN 0 ELSE 0 END)))))
+            ||RPAD(SUBSTR(lr_fetch_detail.invoice_num,1,6),(LENGTH(SUBSTR(lr_fetch_detail.invoice_num,1,6))+(7-LENGTH(SUBSTR(lr_fetch_detail.invoice_num,1,6)))+DECODE(lr_fetch_master.vendor_name,NULL,25,0)))
+            ||RPAD(SUBSTR(lr_fetch_master.vendor_name,1,24),(LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,24))+(25-LENGTH(SUBSTR(lr_fetch_master.vendor_name,1,24)))))
+            ||LPAD(trim(TO_CHAR(ln_pay_amt,'99999999999.99')),(LENGTH(trim(TO_CHAR(ln_pay_amt,'99999999999.99')))+20-LENGTH(trim(TO_CHAR(ln_pay_amt,'99999999999.99')))),0)||' '||lr_fetch_detail.TYPE
+            ||RPAD(LPAD(lv_branch_code,LENGTH(lv_branch_code)+11),length(LPAD(lv_branch_code,LENGTH(lv_branch_code)+11))+(15-LENGTH(lv_branch_code)))
+           INTO lv_invoice_dtls
+           FROM DUAL;
+        EXCEPTION
+          WHEN OTHERS THEN
+           lv_invoice_dtls := NULL;
+        END;
+        --
+        FND_FILE.PUT_LINE(FND_FILE.OUTPUT,lv_invoice_dtls);
+    END LOOP;
+   END IF;
+  END LOOP;
+FND_FILE.PUT_LINE(FND_FILE.OUTPUT,LV_TAIL);
+--
+  INSERT INTO xxxx_duplicate_file_check
+        VALUES('PAYMENT'
+               ,p_paycheck_run
+              );
+
+  COMMIT;
+ELSE
+FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'Payment File already Generated for the Requested Parameters.');
+END IF;
+END xxxx_xx_bank_report;
+/
