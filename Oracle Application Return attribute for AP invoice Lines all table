@@ -1,0 +1,599 @@
+CREATE OR REPLACE function APPS.bsli_ret_ap_aa(l_je_header number,l_je_line number,ctl number)
+return varchar2
+is
+d varchar2(2500);
+
+cursor c1(h number,l number) is
+SELECT distinct  
+(aila.attribute1)
+         FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l; 
+          
+    cursor c2(h number,l number) is     
+         SELECT 
+distinct(aila.attribute2)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+cursor c3(h number,l number) is     
+    SELECT distinct  
+(aila.attribute3)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+         
+         cursor c4(h number,l number) is 
+         SELECT distinct  
+(aila.attribute4)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c5(h number,l number) is
+         SELECT distinct  
+(aila.attribute5)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c6(h number,l number) is
+         SELECT distinct  
+(aila.attribute6)
+       FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c7(h number,l number) is
+         SELECT distinct  
+(aila.attribute7)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c8(h number,l number) is
+         SELECT distinct  
+(aila.attribute8)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c9(h number,l number) is
+         SELECT  
+distinct(aia.attribute1)
+         FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c10(h number,l number) is
+         SELECT 
+distinct(aia.attribute2)
+         FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c11(h number,l number) is
+         SELECT distinct  
+(aia.attribute3)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c12(h number,l number) is
+         SELECT 
+         distinct(aia.attribute4)
+         FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c13(h number,l number) is
+         SELECT 
+         distinct(aia.attribute5)
+         FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c14(h number,l number) is
+         SELECT distinct  
+(aia.attribute6)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c15(h number,l number) is
+         SELECT distinct  
+(aia.attribute7)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+         cursor c16(h number,l number) is
+         SELECT distinct  
+(aia.attribute8)
+        FROM po_vendors pov,
+             xla_distribution_links adl,
+             xla_ae_lines xal,
+             gl_import_references gir,
+             gl_je_lines gjl,
+             gl_je_headers gjh,
+             ap_invoice_distributions_all aid,
+             ap_invoices_all aia,
+             ap_invoice_lines_all aila
+       WHERE adl.source_distribution_id_num_1 = aid.invoice_distribution_id
+         AND aid.invoice_id = aia.invoice_id
+         AND adl.ae_header_id = xal.ae_header_id
+         AND adl.ae_line_num = xal.ae_line_num
+         AND xal.gl_sl_link_id = gir.gl_sl_link_id
+         AND gir.je_header_id = gjl.je_header_id
+         AND gir.je_line_num = gjl.je_line_num
+         AND gir.je_header_id = gjh.je_header_id
+         AND gjh.je_header_id = gjl.je_header_id
+         AND gjh.je_source = 'Payables'
+         AND aia.vendor_id = pov.vendor_id
+         and aia.invoice_id=aila.INVOICE_ID
+               and gjl.GL_SL_LINK_ID is not null
+               and gjh.JE_HEADER_ID=h
+               and gjl.JE_LINE_NUM=l
+             ;  
+          
+          begin
+          d:=null;
+           
+         FND_FILE.PUT_LINE(FND_FILE.LOG,'  header id  '||l_je_header||'  line id   '||l_je_line||'  ctl   '||ctl );
+--          
+          if ctl=1 then
+
+            for i in c1(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute1||' ';
+            end loop;
+            return d;
+            elsif ctl=2 then 
+            
+            for i in c2(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute2||' ';
+            end loop;
+            return d;
+            
+            elsif ctl=3 then 
+            
+            for i in c3(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute3||' ';
+            end loop;
+            return d;
+            elsif ctl=4 then 
+            
+            for i in c4(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute4||' ';
+            end loop;
+            return d;
+            elsif ctl=5 then
+            
+            for i in c5(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute5||' ';
+            end loop;
+             return d;
+            elsif ctl=6 then 
+            
+            for i in c6(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute6||' ';
+            end loop;
+             return d;
+            elsif ctl=7 then 
+            
+            for i in c7(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute7||' ';
+            end loop;
+             return d;
+            elsif ctl=8 then 
+            
+            for i in c8(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute8||' ';
+            end loop;
+             return d;
+            elsif ctl=9 then 
+            
+            for i in c9(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute1||' ';
+            end loop;
+             return d;
+            elsif ctl=10 then 
+            
+            for i in c10(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute2||' ';
+            end loop;
+             return d;
+            elsif ctl=11 then 
+            
+            for i in c11(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute3||' ';
+            end loop;
+             return d;
+            elsif ctl=12 then 
+            
+            for i in c12(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute4||' ';
+            end loop;
+             return d;
+            elsif ctl=13 then
+            
+            for i in c13(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute5||' ';
+            end loop;
+             return d;
+            elsif ctl=14 then 
+            
+            for i in c14(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute6||' ';
+            end loop;
+             return d;
+            elsif ctl=15 then 
+            
+            for i in c15(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute7||' ';
+            end loop;
+             return d;
+            
+            
+                        elsif ctl=16 then 
+                        
+            for i in c16(l_je_header,l_je_line) loop
+            
+            d:=d||i.attribute8||' ';
+            end loop;
+             return d;
+            else
+            return null;
+            end if;
+    
+exception when others then
+  FND_FILE.PUT_LINE(FND_FILE.LOG,' error out header id  '||l_je_header||'  line id   '||l_je_line||'  ctl   '||ctl );
+return 'e';                
+                  
+
+end;
+/
