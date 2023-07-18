@@ -1,0 +1,83 @@
+CREATE OR REPLACE function APPS.xx_fn_cnt_level
+(psid in number DEFAULT NULL,
+ctl in number DEFAULT NULL,
+VID IN NUMBER DEFAULT NULL,
+VSID IN NUMBER DEFAULT NULL
+) 
+return varchar2 
+is
+cursor c1(psd number) is select * from ap_supplier_contacts where party_site_id=psd; 
+CURSOR C2(VD NUMBER,VS NUMBER) IS SELECT * FROM JAI_AP_TDS_VENDOR_HDRS WHERE VENDOR_ID=VID AND VENDOR_SITE_ID=VS;
+var varchar2(2500);
+begin
+var:=null;
+---------------------------FOR AP SUPPLIER CONTACTS------------------------
+if ctl=1 then
+for i in c1(psid) loop
+          var:=var||''||i.url;        
+end loop;        
+elsif
+ctl=2 then
+for i in c1(psid) loop
+          var:=var||''||i.first_name;        
+end loop;
+elsif
+ctl=3 then
+for i in c1(psid) loop
+          var:=var||''||i.middle_name;        
+end loop;
+elsif        
+ctl=4 then
+for i in c1(psid) loop
+          var:=var||''||i.last_name;        
+end loop;
+        elsif
+ctl=5 then
+for i in c1(psid) loop
+          var:=var||''||i.area_code;        
+end loop;
+        elsif
+ctl=6 then
+for i in c1(psid) loop
+          var:=var||''||i.phone;        
+end loop;
+        elsif
+ ctl=7 then
+for i in c1(psid) loop
+          var:=var||''||i.email_address;        
+end loop;
+        elsif
+ctl=8 then
+for i in c1(psid) loop
+          var:=var||''||i.fax_area_code;        
+end loop;
+    
+---------------------------END-----------------------
+ -----------------------FOR JAI_AP_TDS_VENDOR_HDRS TABLE-----------------
+ elsif
+ 
+ctl=9 then
+for i in c2(VID,VSID) loop
+    var:=var||''||i.PAN_NO;        
+end loop;
+ELSIF
+ctl=10 then
+for i in c2(VID,VSID) loop
+    var:=var||''||i.TAN_NO;        
+end loop;
+
+ELSIF CTL=11 THEN
+for i in c2(VID,VSID) loop
+    var:=var||''||i.TDS_VENDOR_TYPE_LOOKUP_CODE;        
+end loop;
+ELSIF
+ctl=12 then
+for i in c2(VID,VSID) loop
+    var:=var||''||i.WARD_NO;        
+end loop;
+
+----------------------------END 
+end if;
+return var;
+end;
+/
