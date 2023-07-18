@@ -1,0 +1,103 @@
+CREATE OR REPLACE PROCEDURE APPS.xx_UPDATE_AMS_INVOICES(x_err_buf OUT VARCHAR2
+                                                      ,x_ret_code OUT VARCHAR2
+                                                      )
+AS
+cursor lcu_amstdsinvoice_fetch
+IS
+SELECT aps.invoice_id,aia.invoice_num,a.attribute5,a.invoice_num org_inv
+FROM ap_invoices_all aia
+     ,(SELECT distinct ai.invoice_id,ai.invoice_num,ail.attribute5 ,sum(ail.amount) amt,aid.attribute1
+      FROM ap_invoices_all ai
+          ,ap_invoice_lines_all ail
+          ,ap_invoice_distributions_all aid
+      where ai.invoice_id = ail.invoice_id
+      and   ai.invoice_id = aid.invoice_id
+      and   ail.line_number = aid.INVOICE_LINE_NUMBER
+      and ail.attribute5 is not null
+      and ail.attribute_category like 'TPV'
+      group by ai.invoice_id,ai.invoice_num,ail.attribute5 ,aid.attribute1
+     ) a
+    ,AP_PAYMENT_SCHEDULES_ALL aps
+    ,jai_ap_tds_invoices jati
+WHERE aia.attribute1 = TO_CHAR(a.invoice_id)
+AND aia.INVOICE_TYPE_LOOKUP_CODE = 'STANDARD'
+AND aia.invoice_num LIKE a.invoice_num||'-TDS%'
+AND aia.attribute1 IS NOT NULL
+AND aia.invoice_id = aps.invoice_id
+AND aps.payment_status_flag = 'N'
+AND aps.due_date<>'31-MAY-'||to_char(aps.due_date,'YYYY')
+AND aia.invoice_num = jati.tds_invoice_num
+AND jati.invoice_id = TO_CHAR(a.invoice_id)
+AND jati.invoice_amount = a.amt
+AND a.attribute5 IN (select gjl.JGZZ_RECON_REF
+                     from gl_je_headers gjh
+                         ,gl_je_lines_recon gjl
+                     where gjh.je_header_id = gjl.je_header_id
+                     and gjl.JGZZ_RECON_REF is not null
+                     and gjh.je_category = '64');
+
+ln_inv_count NUMBER := 0;
+
+BEGIN
+  BEGIN
+    SELECT count(*)
+     INTO ln_inv_count
+    FROM ap_invoices_all aia
+   ,(SELECT distinct ai.invoice_id,ai.invoice_num,ail.attribute5 ,sum(ail.amount) amt,aid.attribute1
+      FROM ap_invoices_all ai
+          ,ap_invoice_lines_all ail
+          ,ap_invoice_distributions_all aid
+      where ai.invoice_id = ail.invoice_id
+      and   ai.invoice_id = aid.invoice_id
+      and   ail.line_number = aid.INVOICE_LINE_NUMBER
+      and ail.attribute5 is not null
+      and ail.attribute_category like 'TPV'
+      group by ai.invoice_id,ai.invoice_num,ail.attribute5 ,aid.attribute1
+     ) a
+    ,AP_PAYMENT_SCHEDULES_ALL aps
+    ,jai_ap_tds_invoices jati
+WHERE aia.attribute1 = TO_CHAR(a.invoice_id)
+AND aia.INVOICE_TYPE_LOOKUP_CODE = 'STANDARD'
+AND aia.invoice_num LIKE a.invoice_num||'-TDS%'
+AND aia.attribute1 IS NOT NULL
+AND aia.invoice_id = aps.invoice_id
+AND aps.payment_status_flag = 'N'
+AND aps.due_date<>'31-MAY-'||to_char(aps.due_date,'YYYY')
+AND aia.invoice_num = jati.tds_invoice_num
+AND jati.invoice_id = TO_CHAR(a.invoice_id)
+AND jati.invoice_amount = a.amt
+AND a.attribute5 IN (select gjl.JGZZ_RECON_REF
+                     from gl_je_headers gjh
+                         ,gl_je_lines_recon gjl
+                     where gjh.je_header_id = gjl.je_header_id
+                     and gjl.JGZZ_RECON_REF is not null
+                     and gjh.je_category = '64');
+  EXCEPTION
+    WHEN OTHERS THEN
+      LN_INV_COUNT := 0;
+  END;
+  --
+  IF LN_INV_COUNT > 0 THEN
+
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'UPDATED AMS Invoice are Listed Below');
+    FOR lr_amstdsinvoice_fetch IN lcu_amstdsinvoice_fetch
+    LOOP
+     --
+    EXIT WHEN lcu_amstdsinvoice_fetch%NOTFOUND;
+    BEGIN
+    UPDATE AP_PAYMENT_SCHEDULES_ALL set due_date = '31-MAY-'||to_char(due_date,'YYYY')
+    WHERE invoice_id = lr_amstdsinvoice_fetch.invoice_id;
+    commit;
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'Oracle Invoice Num - '||lr_amstdsinvoice_fetch.invoice_num||' - '||'Original AMS Invoice Num'
+                      ||' - '||lr_amstdsinvoice_fetch.attribute5||' -Original Invoice Num- '||lr_amstdsinvoice_fetch.org_inv);
+    EXCEPTION
+      WHEN OTHERS THEN
+       FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'ERROR WHILE UPDATING INVOICE DUE DATE');
+    END;
+    --
+    END LOOp;
+  ELSE
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'NO AMS Invoices ARE FOUND FOR UPDATION');
+  END IF;
+
+END xx_UPDATE_AMS_INVOICES;
