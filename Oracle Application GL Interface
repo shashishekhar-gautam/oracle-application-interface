@@ -1,0 +1,1902 @@
+DROP TABLE APPS.XXxx_GL_INTERFACE CASCADE CONSTRAINTS;
+
+CREATE TABLE APPS.XXxx_GL_INTERFACE
+(
+  STATUS                         VARCHAR2(15 BYTE),
+  TRANSACTION_NUMBER             VARCHAR2(30 BYTE),
+  LEDGER_ID                      NUMBER,
+  ACCOUNTING_DATE                DATE,
+  DATE_CREATED                   DATE,
+  CREATED_BY                     NUMBER,
+  ACTUAL_FLAG                    VARCHAR2(1 BYTE),
+  USER_JE_CATEGORY_NAME          VARCHAR2(25 BYTE),
+  USER_JE_SOURCE_NAME            VARCHAR2(25 BYTE),
+  SEGMENT_1                      VARCHAR2(25 BYTE),
+  SEGMENT_2                      VARCHAR2(25 BYTE),
+  SEGMENT_3                      VARCHAR2(25 BYTE),
+  SEGMENT_4                      VARCHAR2(25 BYTE),
+  SEGMENT_5                      VARCHAR2(25 BYTE),
+  SEGMENT_6                      VARCHAR2(25 BYTE),
+  SEGMENT_7                      VARCHAR2(25 BYTE),
+  SEGMENT_8                      VARCHAR2(25 BYTE),
+  SEGMENT_9                      VARCHAR2(25 BYTE),
+  SEGMENT_10                     VARCHAR2(25 BYTE),
+  AMOUNT_DR                      NUMBER,
+  AMOUNT_CR                      NUMBER,
+  CURRENCY_CODE                  VARCHAR2(10 BYTE),
+  CURRENCY_CONVERSION_RATE       NUMBER,
+  CURRENCY_CONVERSION_DATE       DATE,
+  CURRENCY_CONVERSION_RATE_TYPE  VARCHAR2(15 BYTE),
+  JGZZ_RECON_REF                 VARCHAR2(240 BYTE),
+  ATTRIBUTE1                     VARCHAR2(150 BYTE),
+  ATTRIBUTE2                     VARCHAR2(150 BYTE),
+  ATTRIBUTE3                     VARCHAR2(150 BYTE),
+  ATTRIBUTE4                     VARCHAR2(150 BYTE),
+  REFERENCE10                    VARCHAR2(240 BYTE),
+  MODIFIED_BY                    NUMBER,
+  MODIFIED_DATE                  DATE,
+  PROCESSED_STATUS               VARCHAR2(10 BYTE),
+  ERROR_MESSAGE                  VARCHAR2(2000 BYTE),
+  BUDGET_NAME                    VARCHAR2(15 BYTE),
+  ENCUMBRANCE_TYPE               VARCHAR2(30 BYTE),
+  PERIOD                         VARCHAR2(15 BYTE),
+  ATTRIBUTE5                     VARCHAR2(150 BYTE),
+  ATTRIBUTE6                     VARCHAR2(150 BYTE),
+  ATTRIBUTE7                     VARCHAR2(150 BYTE),
+  ATTRIBUTE8                     VARCHAR2(150 BYTE),
+  ATTRIBUTE9                     VARCHAR2(150 BYTE),
+  ATTRIBUTE10                    VARCHAR2(150 BYTE),
+  PROCESS_DATE                   DATE
+)
+TABLESPACE APPS_TS_TX_DATA
+PCTUSED    0
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          128K
+            NEXT             128K
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE
+NOPARALLEL
+MONITORING;
+
+
+
+CREATE OR REPLACE PACKAGE APPS.XXxx_GL_INT_PKG AS
+
+/* $Header:       XXxxGLINTIMPORTSPEC.sql                                     $ */
+-- +===========================================================================+
+-- |                                                                           |
+-- +===========================================================================+
+-- | Name       : XXxxGLINTIMPORTSPEC.sql                                    |
+-- | Project    : GL IMPORT PROGRAM                                            |
+-- | Application:                                                              |
+-- | Inputs     :                                                              |
+-- | Outputs    :                                                              |
+-- | Database   :                                                              |
+-- | Description:                                                              |
+-- |                                                                           |
+-- |                                                                           |
+-- |                                                                           |
+-- |                                                                           |
+-- | Related                                                                   |
+-- | Documents                                                                 |
+-- |                                                                           |
+-- |Version  Date         Author             Comments                          |
+-- |=======  ===========  =================  ================================= |
+-- |                      Shashi gautam       Initial Version                   |
+-- |                                                                           |
+-- +===========================================================================+
+
+  PROCEDURE main(x_err_buf  OUT VARCHAR2
+                ,x_ret_code OUT VARCHAR2
+                ,p_source   IN  VARCHAR2
+                );
+  --
+
+  PROCEDURE RUN(x_err_buf  OUT VARCHAR2
+               ,x_ret_code OUT VARCHAR2
+               ,p_file     IN  VARCHAR2
+               ,p_source   IN  VARCHAR2
+               );
+
+
+END XXxx_GL_INT_PKG;
+/
+
+
+CREATE OR REPLACE PACKAGE BODY APPS.XXxx_GL_INT_PKG AS
+
+/* $Header:       XXxxGLINTIMPORT.sql                                     $ */
+-- +===========================================================================+
+-- |                                                                           |
+-- +===========================================================================+
+-- | Name       : XXxxGLINTIMPORT.sql                                        |
+-- | Project    : GL IMPORT PROGRAM                                            |
+-- | Application:                                                              |
+-- | Inputs     :                                                              |
+-- | Outputs    :                                                              |
+-- | Database   :                                                              |
+-- | Description:                                                              |
+-- |                                                                           |
+-- |                                                                           |
+-- |                                                                           |
+-- |                                                                           |
+-- | Related                                                                   |
+-- | Documents                                                                 |
+-- |                                                                           |
+-- |Version  Date         Author             Comments                          |
+-- |=======  ===========  =================  ================================= |
+-- |D1a                   Shashi        Initial Version                   |
+-- |                                                                           |
+-- +===========================================================================+
+--
+--
+--Global Variable Declaration
+
+  g_err_msg                 VARCHAR2(1000);
+  g_err_loc                 VARCHAR2(100);
+  g_created_by              NUMBER := FND_GLOBAL.USER_ID;
+  g_application_short_name  VARCHAR2(15);
+
+--
+  -- +==============================================================================+
+  -- | Name        : print_msg                                                      |
+  -- |                                                                              |
+  -- | Description : The procedure is to log and output file messages.              |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- | Parameters  : p_mode       IN VARCHAR2                                       |
+  -- |               p_msg        IN VARCHAR2                                       |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                   Shashi gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+
+  PROCEDURE print_msg(p_mode VARCHAR2
+                     ,p_msg  VARCHAR2
+                     )
+  IS
+  BEGIN
+    IF (p_mode='LOG') THEN
+      FND_FILE.PUT_LINE(FND_FILE.LOG,TO_CHAR(SYSDATE,'DD-MON-YYYY HH:MI:SS')||CHR(10)||p_msg);
+    ELSE
+      FND_FILE.PUT_LINE(FND_FILE.OUTPUT,TO_CHAR(SYSDATE,'DD-MON-YYYY HH:MI:SS')||CHR(10)||p_msg);
+    END IF;
+  EXCEPTION
+    WHEN OTHERS THEN
+      FND_FILE.PUT_LINE(FND_FILE.LOG,'ERROR HAS OCCURED IN print_msg');
+  END print_msg;
+  ---
+  ---
+-- Procedure to Load Data into Staging Table XXxx_GL_INTERFACE
+  -- +==============================================================================+
+  -- | Name        : extract_record                                                 |
+  -- |                                                                              |
+  -- | Description : The procedure is to extract record from DAT files to           |
+  -- |               staging tables XXxx_GL_INTERFACE                              |
+  -- |                                                                              |
+  -- | Parameters  : x_err_buf    OUT VARCHAR2                                      |
+  -- |               x_ret_code   OUT VARCHAR2                                      |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                   Shashi gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+
+  PROCEDURE extract_record(x_err_buf  OUT VARCHAR2
+                          ,x_ret_code OUT VARCHAR2
+                          ,p_file IN VARCHAR2
+                          )
+  IS
+  ln_request_id  NUMBER(20);
+  lb_wait        BOOLEAN;
+  lc_phase       VARCHAR2(20);
+  lc_status      VARCHAR2(20);
+  lc_dev_phase   VARCHAR2(20);
+  lc_dev_status  VARCHAR2(20);
+  lc_message     VARCHAR2(20);
+  lc_error_msg   VARCHAR2(200);
+  l_file         VARCHAR2(240);
+  BEGIN
+    ln_request_id := 0;
+    --
+    l_file := '/d05_concapp01/stage_file/GL/'||p_file;
+    --
+    ln_request_id := FND_REQUEST.SUBMIT_REQUEST('SQLGL'
+                                             ,'xxGLIMPCONTROL'
+                                             ,''
+                                             ,''
+                                             ,FALSE
+                                             ,l_file
+                                             );
+    COMMIT;
+    IF ln_request_id <> 0 THEN
+      lb_wait := FND_CONCURRENT.WAIT_FOR_REQUEST(ln_request_id
+                                       ,10
+                                    ,50
+                                    ,lc_phase
+                                    ,lc_status
+                                    ,lc_dev_phase
+                                    ,lc_dev_status
+                                    ,lc_message
+                                                );
+    END IF;
+  EXCEPTION
+    WHEN OTHERS THEN
+      lc_error_msg := SQLERRM;
+      FND_FILE.PUT_LINE(FND_FILE.LOG,lc_error_msg);
+  END extract_record;
+--End of procedure extract_record------------------
+--
+-- Procedure to Delete processed records from Staging Table XXxx_GL_INTERFACE
+  -- +==============================================================================+
+  -- | Name        : delete_record                                                 |
+  -- |                                                                              |
+  -- | Description : The procedure is to delete processed records from              |
+  -- |               staging tables XXxx_GL_INTERFACE                              |
+  -- |                                                                              |
+  -- | Parameters  : x_err_buf    OUT VARCHAR2                                      |
+  -- |               x_ret_code   OUT VARCHAR2                                      |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                   Shashi gautam        Initial version.                    |
+  -- |                                                                              |
+  -- +==============================================================================+
+  PROCEDURE delete_record(
+                          x_err_buf  OUT VARCHAR2
+                         ,x_ret_code OUT VARCHAR2
+                         )
+  IS
+  lc_err_msg  VARCHAR2(200);
+  BEGIN
+    DELETE FROM XXxx_GL_INTERFACE
+    WHERE PROCESSED_STATUS = 'Valid';
+    COMMIT;
+  EXCEPTION
+    WHEN OTHERS THEN
+      lc_err_msg := SQLERRM;
+      FND_FILE.PUT_LINE(FND_FILE.LOG,lc_err_msg);
+  --
+  END delete_record;
+--End of procedure delete_record---------------
+--
+-- Procedure to validate records
+  -- +===========================================================================+
+  -- | Name        : validate_record                                             |
+  -- |                                                                           |
+  -- | Description : The procedure is to validate the records to be imported     |
+  -- |                                                                           |
+  -- |                                                                           |
+  -- | Parameters  : x_err_buf    OUT VARCHAR2                                   |
+  -- |               x_ret_code   OUT VARCHAR2                                   |
+  -- |                                                                           |
+  -- | Returns     : n/a                                                         |
+  -- |                                                                           |
+  -- |Ver.     Date         Author              Comments                         |
+  -- |====     ==========  ==================  ============================      |
+  -- |D1a                  Shashi gautam        Initial version.                  |
+  -- |                                                                           |
+  -- +===========================================================================+
+  PROCEDURE validate_record(x_err_buf    OUT VARCHAR2
+                           ,x_ret_code   OUT VARCHAR2
+                           ,p_source   IN  VARCHAR2
+                           )
+  IS
+  --+=======================================================
+  --|  Cursor to check existance of record in staging table |
+  --|=======================================================|
+  CURSOR cur_chk_rcd_exist(p_source   IN  VARCHAR2)
+  IS
+  SELECT COUNT(*) total FROM XXxx_GL_INTERFACE
+  WHERE PROCESSED_STATUS IS NULL
+  AND  USER_JE_CATEGORY_NAME = p_source;
+  --
+  --+============================================================
+  --|  Cursor to FETCH DISTINCT TRANSACTION NUMBER               |
+  --|============================================================|
+
+  CURSOR cur_distinct_transaction(p_source   IN  VARCHAR2)
+  IS
+  SELECT DISTINCT ACCOUNTING_DATE,USER_JE_CATEGORY_NAME,USER_JE_SOURCE_NAME,CURRENCY_CODE,LEDGER_ID
+  FROM XXxx_GL_INTERFACE
+  WHERE PROCESSED_STATUS = 'V'
+  AND  USER_JE_CATEGORY_NAME = p_source;
+
+  --+============================================================
+  --|  Cursor to Check Unbalanced Journals                       |
+  --|============================================================|
+
+  CURSOR cur_check_unbalanced_journal(P_CAT_NAME IN VARCHAR2
+                                     ,P_DATE     IN DATE
+                                     ,p_currency IN VARCHAR2
+                                     ,p_source   IN  VARCHAR2
+                                     ) IS
+  SELECT XGIST.*
+  FROM XXxx_GL_INTERFACE XGIST
+  WHERE PROCESSED_STATUS = 'V'
+  AND   XGIST.USER_JE_CATEGORY_NAME = P_CAT_NAME
+  AND   XGIST.ACCOUNTING_DATE     = P_DATE
+  AND   XGIST.CURRENCY_CODE = p_currency
+  AND   XGIST.USER_JE_CATEGORY_NAME = p_source;
+
+  --+============================================================
+  --|  Cursor to process each record validation in staging table |
+  --|============================================================|
+
+  CURSOR cur_validate_rcd(p_source   IN  VARCHAR2)
+  IS
+  SELECT XGIST.ROWID row_id,XGIST.*
+  FROM XXxx_GL_INTERFACE XGIST
+  WHERE PROCESSED_STATUS IS NULL
+  AND  USER_JE_CATEGORY_NAME = p_source;
+  --
+  --+========================================================================
+  --|  Cursor to validate LEDGER_ID in staging table                         |
+  --|========================================================================|
+
+  CURSOR cur_sob_validation(p_LEDGER_ID NUMBER) IS
+  SELECT LEDGER_ID sb,chart_of_accounts_id coa,CURRENCY_CODE cc
+  FROM GL_LEDGERS sob
+  WHERE sob.LEDGER_ID = p_LEDGER_ID;
+  --
+  --+============================================================
+  --|  Cursor to validate Journal Category in staging table      |
+  --|============================================================|
+
+  CURSOR cur_cat_validation(p_cat VARCHAR2) IS
+  SELECT GC.user_je_category_name category_name
+  FROM  gl_je_categories GC
+  WHERE GC.user_je_category_name = p_cat;
+  --
+  --+============================================================
+  --|  Cursor to validate Journal Source in staging table        |
+  --|============================================================|
+
+  CURSOR cur_src_validation(p_source VARCHAR2) IS
+  SELECT GS.user_je_source_name source_name
+  FROM  gl_je_sources GS
+  WHERE GS.user_je_source_name = p_source;
+  --
+  --+============================================================
+  --|  Cursor to validate Currency Code in staging table         |
+  --|============================================================|
+
+  CURSOR cur_cc_validate(p_currency  VARCHAR2) IS
+  SELECT GC.currency_code currency
+  FROM gl_currencies GC
+  WHERE GC.currency_code = p_currency;
+
+  --
+  --+==========================================================+
+  --|CURSOR to validate conversion_type                        |
+  --|==========================================================|
+  CURSOR cur_conv_type_validate(p_conversion_type IN VARCHAR2
+                               )
+  IS
+  SELECT gdc.conversion_type
+  FROM gl_daily_conversion_types gdc
+  WHERE gdc.conversion_type = p_conversion_type;
+  --
+  --+==========================================================+
+  --|CURSOR to validate conversion_date                        |
+  --|==========================================================|
+  CURSOR cur_conv_date_validate(p_conversion_date IN DATE
+                               ,p_conversion_type IN VARCHAR2
+                               ,p_from_currency IN VARCHAR2
+                               ,p_to_currency IN VARCHAR2
+                               )
+  IS
+  SELECT gdr.conversion_rate
+  FROM gl_daily_rates gdr
+  WHERE gdr.conversion_type = p_conversion_type
+  AND   gdr.from_currency   = p_from_currency
+  AND   gdr.to_currency     = p_to_currency
+  AND   gdr.conversion_date = p_conversion_date;
+
+  --
+  --+============================================================
+  --|  Cursor to validate Actual Flag in staging table           |
+  --|============================================================|
+
+  CURSOR cur_ac_flag_validation(p_flag VARCHAR2) IS
+  SELECT DECODE(UPPER(p_flag)
+               ,'A'
+               ,1
+               ,'B'
+               ,1
+               ,'C'
+               ,1
+               ,2
+               ) valid
+  FROM DUAL;
+--
+  --+============================================================
+  --|  Cursor to get Budget Version Id if Actual_flag ='B'       |
+  --|============================================================|
+
+  CURSOR cur_budget_id_validation(p_budget_name    VARCHAR2) IS
+  SELECT budget_version_id budget_id
+  FROM gl_budget_versions GBV
+  WHERE GBV.budget_name = p_budget_name
+  AND   GBV.status IN ('C','O');
+  --
+  --+=========================================================================================
+  --|  Cursor to check the Period status based on accounting date when actual_flag != 'B'     |
+  --|=========================================================================================|
+  CURSOR cur_chk_period_st(p_date   IN DATE
+                          ,p_sob_id IN NUMBER
+                           )
+  IS
+  SELECT period_name
+  FROM gl_period_statuses
+  WHERE LEDGER_ID      = p_sob_id
+  AND   application_id  = 101
+  AND   closing_status = 'O'
+  AND   p_date BETWEEN start_date AND end_date ;
+
+  --+===========================================================================
+  --|  Cursor to validate Period Name in staging table if Actual_flag = 'B'     |
+  --|===========================================================================|
+
+  CURSOR cur_gl_periods(p_periods VARCHAR2
+                       ,p_sob     NUMBER
+                       ) IS
+  SELECT period_name period
+  FROM gl_period_statuses GPS
+  WHERE GPS.period_name      = p_periods
+  AND   GPS.LEDGER_ID        = p_sob
+  AND   gps.application_id   = (SELECT application_id
+                                FROM fnd_application
+                                WHERE application_short_name = fnd_global.application_short_name
+                                )
+  AND   GPS.closing_status = 'O';
+--
+  --+======================================================================
+  --|  Cursor to validate Encumbrance Type and to get encumbrance_type_id  |
+  --|======================================================================|
+
+  CURSOR cur_encumbrance_id_validate(p_encumbrance_type   IN VARCHAR2) IS
+  SELECT get.encumbrance_type_id encumbrance_id
+  FROM gl_encumbrance_types get
+  WHERE get.encumbrance_type = p_encumbrance_type;
+  --
+  --+======================================================================
+  --|  Cursor to validate Account segments                                 |
+  --|======================================================================|
+  CURSOR cur_account_validation(p_row_id    IN VARCHAR2
+                               ,p_coa_id    IN NUMBER
+                               )
+  IS
+  SELECT gcc.code_combination_id
+  FROM gl_code_combinations gcc
+      ,XXxx_GL_INTERFACE xgi
+  WHERE gcc.segment1             = xgi.segment_1
+  AND   gcc.segment2             = xgi.segment_2
+  AND   gcc.segment3             = xgi.segment_3
+  AND   gcc.segment4             = xgi.segment_4
+  AND   gcc.segment5             = xgi.segment_5
+  AND   gcc.segment6             = xgi.segment_6
+  AND   gcc.segment7             = xgi.segment_7
+  AND   gcc.segment8             = xgi.segment_8
+  AND   gcc.segment9             = xgi.segment_9
+  AND   gcc.segment10            = xgi.segment_10
+  --AND   gcc.segment11            = xgi.segment_11
+  AND   gcc.chart_of_accounts_id = p_coa_id
+  AND   xgi.ROWID                = p_row_id;
+  --
+  lr_chk_rcd_exist            cur_chk_rcd_exist%ROWTYPE;
+  ex_main_exception           EXCEPTION;
+  lr_sob_validation           cur_sob_validation%ROWTYPE;
+  lr_cat_validation           VARCHAR2(100);
+  lr_src_validation           VARCHAR2(100);
+  lr_cc_validate              VARCHAR2(20);
+  lr_ac_flag_validation       VARCHAR2(1);
+  lr_account_validation       NUMBER;
+  lr_budget_id_validation     NUMBER;
+  lr_chk_period_st            VARCHAR2(20);
+  lr_gl_periods               VARCHAR2(20);
+  lr_encumbrance_id_validate  NUMBER;
+  lr_conv_type_validate       VARCHAR2(50);
+  lr_conv_date_validate       NUMBER;
+  i                           NUMBER := 0;
+  ln_currency_code            VARCHAR2(20);
+  ln_ledger_id                NUMBER;
+  ln_coa_id                   NUMBER;
+  ln_je_category              VARCHAR2(100);
+  ln_je_source                VARCHAR2(100);
+  ln_account_id               NUMBER;
+  ln_budget_id                NUMBER;
+  ln_encumbrance_id           NUMBER;
+  ln_sob_currency             VARCHAR2(50);
+  ln_conversion_type          VARCHAR2(50);
+  ln_dr_amt_total             NUMBER;
+  ln_dr_fc_amt                NUMBER;
+  ln_cr_amt_total             NUMBER;
+  ln_cr_fc_amt                NUMBER;
+  ln_cc_conv_rate             NUMBER;
+
+--
+  BEGIN
+    --FND_GLOBAL.APPS_INITIALIZE(1318,50553,101);
+    OPEN cur_chk_rcd_exist(p_source);
+    FETCH cur_chk_rcd_exist INTO lr_chk_rcd_exist;
+    CLOSE cur_chk_rcd_exist;
+    IF lr_chk_rcd_exist.total > 0 THEN
+
+      FOR lr_validate_rcd IN cur_validate_rcd(p_source) LOOP
+        EXIT WHEN cur_validate_rcd%NOTFOUND;
+        --
+        EXIT WHEN cur_validate_rcd%ROWCOUNT> 200000;
+        --
+        /*
+        BEGIN
+          DELETE FROM GL_INTERFACE
+          WHERE ACCOUNTING_DATE = lr_validate_rcd.ACCOUNTING_DATE
+          AND USER_JE_CATEGORY_NAME = lr_validate_rcd.USER_JE_CATEGORY_NAME
+          AND USER_JE_SOURCE_NAME   = lr_validate_rcd.USER_JE_SOURCE_NAME
+          AND STATUS = 'NEW';
+          COMMIT;
+        EXCEPTION
+          WHEN OTHERS THEN
+          g_err_msg := NULL;
+        END;
+        */
+
+        g_err_msg := NULL;
+        ln_currency_code  := NULL;
+        ln_ledger_id      := NULL;
+        ln_coa_id         := NULL;
+        ln_je_category    := NULL;
+        ln_je_source      := NULL;
+        ln_account_id     := NULL;
+        ln_budget_id      := NULL;
+        ln_encumbrance_id := NULL;
+        ln_sob_currency   := NULL;
+        ln_conversion_type := NULL;
+        ln_cc_conv_rate    := NULL;
+        --
+        i := i+1;
+        --
+        IF lr_validate_rcd.status IS NULL THEN
+          g_err_msg := 'STATUS is null'||CHR(10);
+        END IF;
+        --
+        IF lr_validate_rcd.currency_code IS NULL THEN
+          g_err_msg := g_err_msg||'Currency Code is null'||CHR(10);
+        ELSE
+          OPEN cur_cc_validate(lr_validate_rcd.currency_code);
+          FETCH cur_cc_validate INTO lr_cc_validate;
+          CLOSE cur_cc_validate;
+          --
+          ln_currency_code := lr_cc_validate;
+          --
+          IF ln_currency_code IS NULL THEN
+            g_err_msg := g_err_msg||'Currency Code is Invalid'||CHR(10);
+          END IF;
+        END IF;
+        --
+
+        IF lr_validate_rcd.LEDGER_ID IS NULL THEN
+          g_err_msg := g_err_msg||'LEDGER_ID is null'||CHR(10);
+        ELSE
+          OPEN cur_sob_validation(lr_validate_rcd.LEDGER_ID);
+          FETCH cur_sob_validation INTO lr_sob_validation;
+          --
+          ln_ledger_id := lr_sob_validation.sb ;
+          ln_coa_id    := lr_sob_validation.coa ;
+          ln_sob_currency := lr_sob_validation.cc;
+          --
+          IF ln_ledger_id IS NULL THEN
+            g_err_msg := g_err_msg||'LEDGER_ID is Invalid'||CHR(10);
+          END IF;
+          CLOSE cur_sob_validation;
+        END IF;
+        --
+        IF ln_sob_currency <> ln_currency_code AND ln_currency_code <> 'STAT' THEN
+           IF lr_validate_rcd.CURRENCY_CONVERSION_RATE_TYPE IS NULL THEN
+              g_err_msg := g_err_msg||'Conversion Rate Type is Null'||CHR(10);
+           ELSE
+             OPEN cur_conv_type_validate(lr_validate_rcd.CURRENCY_CONVERSION_RATE_TYPE);
+             FETCH cur_conv_type_validate INTO lr_conv_type_validate;
+
+             --
+             ln_conversion_type := lr_conv_type_validate;
+             CLOSE cur_conv_type_validate;
+
+             IF ln_conversion_type IS NULL THEN
+               g_err_msg := g_err_msg||'Conversion Rate Type is Invalid'||CHR(10);
+             ELSIF ln_conversion_type = 'User' THEN
+               IF lr_validate_rcd.CURRENCY_CONVERSION_RATE IS NULL OR lr_validate_rcd.CURRENCY_CONVERSION_RATE =0 THEN
+                 g_err_msg := g_err_msg||'Conversion Rate is null'||CHR(10);
+               END IF;
+             ELSIF lr_validate_rcd.CURRENCY_CONVERSION_RATE IS NOT NULL THEN
+                g_err_msg := g_err_msg||'Conversion Rate should be null'||CHR(10);
+             END IF;
+             --
+             IF lr_validate_rcd.CURRENCY_CONVERSION_DATE IS NULL THEN
+               g_err_msg := g_err_msg||'currency Conversion Date is Null'||CHR(10);
+             ELSE
+               BEGIN
+                  SELECT gdr.conversion_rate
+                  INTO ln_cc_conv_rate
+                  FROM gl_daily_rates gdr
+                  WHERE gdr.conversion_type = lr_validate_rcd.CURRENCY_CONVERSION_RATE_TYPE
+                  AND   gdr.from_currency   = lr_validate_rcd.currency_code
+                  AND   gdr.to_currency     = ln_sob_currency
+                  AND   gdr.conversion_date = lr_validate_rcd.CURRENCY_CONVERSION_DATE;
+
+               EXCEPTION
+                 WHEN OTHERS THEN
+                    ln_cc_conv_rate := NULL;
+               END;
+               IF ln_cc_conv_rate IS NULL THEN
+                 g_err_msg := g_err_msg||'Invalid currency Conversion Date'||CHR(10);
+               END IF;
+             END IF;
+          END IF;
+        END IF;
+        --
+        IF lr_validate_rcd.actual_flag IS NULL THEN
+          g_err_msg := g_err_msg||'Actual Flag is null'||CHR(10);
+        ELSE
+          OPEN cur_ac_flag_validation(lr_validate_rcd.actual_flag);
+          FETCH cur_ac_flag_validation INTO lr_ac_flag_validation;
+          CLOSE cur_ac_flag_validation;
+          --
+          IF lr_ac_flag_validation = 2 THEN
+            g_err_msg := g_err_msg||'Actual Flag is Invalid'||CHR(10);
+          ELSIF
+            lr_validate_rcd.actual_flag = 'B' THEN
+            IF lr_validate_rcd.budget_name IS NULL THEN
+              g_err_msg := g_err_msg||'Budget Name is Null'||CHR(10);
+            ELSIF
+              lr_validate_rcd.period IS NULL THEN
+                g_err_msg := g_err_msg||'Period is Null'||CHR(10);
+            ELSE
+              OPEN cur_budget_id_validation(lr_validate_rcd.budget_name);
+              FETCH cur_budget_id_validation INTO lr_budget_id_validation;
+              CLOSE cur_budget_id_validation;
+              --
+              ln_budget_id := lr_budget_id_validation;
+              --
+              IF ln_budget_id IS NULL THEN
+                g_err_msg := g_err_msg||'Budget Name is Invalid'||CHR(10);
+              END IF;
+              --
+              OPEN cur_gl_periods(lr_validate_rcd.period,ln_ledger_id);
+              FETCH cur_gl_periods INTO lr_gl_periods;
+              CLOSE cur_gl_periods;
+              IF lr_gl_periods IS NULL THEN
+                g_err_msg := g_err_msg||'Period is Invalid'||CHR(10);
+              END IF;
+            END IF;
+          ELSIF
+            lr_validate_rcd.actual_flag = 'E' THEN
+            --
+            IF lr_validate_rcd.encumbrance_type IS NULL THEN
+              g_err_msg := g_err_msg||'Encumbrance type is Null'||CHR(10);
+            ELSE
+              OPEN cur_encumbrance_id_validate(lr_validate_rcd.encumbrance_type);
+              FETCH cur_encumbrance_id_validate INTO lr_encumbrance_id_validate;
+              CLOSE cur_encumbrance_id_validate;
+              --
+              ln_encumbrance_id := lr_encumbrance_id_validate;
+              --
+              IF ln_encumbrance_id IS NULL THEN
+                g_err_msg := g_err_msg||'Encumbrance type is Invalid'||CHR(10);
+              END IF;
+            END IF;
+          END IF;
+        END IF;
+        --
+        IF lr_validate_rcd.ACCOUNTING_DATE IS NULL THEN
+          g_err_msg := g_err_msg||'ACCOUNTING_DATE is null'||CHR(10);
+        END IF;
+        --
+        IF lr_validate_rcd.USER_JE_CATEGORY_NAME IS NULL THEN
+          g_err_msg := g_err_msg||'User Category id is null'||CHR(10);
+        ELSE
+          OPEN cur_cat_validation(lr_validate_rcd.USER_JE_CATEGORY_NAME);
+          FETCH cur_cat_validation INTO lr_cat_validation;
+          --
+          ln_je_category := lr_cat_validation;
+          --
+          IF lr_cat_validation IS NULL THEN
+            g_err_msg := g_err_msg||'User Category id is Invalid'||CHR(10);
+          END IF;
+          CLOSE cur_cat_validation;
+        END IF;
+        --
+        IF lr_validate_rcd.USER_JE_SOURCE_NAME IS NULL THEN
+          g_err_msg := g_err_msg||'User Source Name is null'||CHR(10);
+        ELSE
+          /*
+          OPEN cur_src_validation(lr_validate_rcd.USER_JE_SOURCE_NAME);
+          FETCH cur_src_validation INTO lr_src_validation;
+          CLOSE cur_src_validation;
+          --
+          ln_je_source := lr_src_validation;
+         */
+          --
+          BEGIN
+           SELECT GS.user_je_source_name
+           INTO ln_je_source
+           FROM  gl_je_sources GS
+           WHERE GS.user_je_source_name = lr_validate_rcd.USER_JE_SOURCE_NAME;
+          EXCEPTION
+            WHEN OTHERS THEN
+               ln_je_source := NULL;
+          END;
+
+          IF ln_je_source IS NULL THEN
+            g_err_msg := g_err_msg||'User Source Name is Invalid'||CHR(10);
+          END IF;
+        END IF;
+        --
+        IF lr_validate_rcd.ACCOUNTING_DATE IS NULL THEN
+          g_err_msg := g_err_msg||'Accounting Date is null'||CHR(10);
+        ELSE
+          OPEN cur_chk_period_st(lr_validate_rcd.ACCOUNTING_DATE
+                                ,lr_sob_validation.sb
+                                );
+          FETCH cur_chk_period_st INTO lr_chk_period_st;
+          CLOSE cur_chk_period_st;
+          --
+          IF lr_chk_period_st IS NULL THEN
+            g_err_msg := g_err_msg||'GL Period is not open for Accounting Date'||CHR(10);
+          END IF;
+        END IF;
+      --
+        /*
+        OPEN cur_account_validation(lr_validate_rcd.ROW_ID
+                                   ,lr_sob_validation.coa
+                                   );
+        FETCH cur_account_validation INTO lr_account_validation;
+        CLOSE cur_account_validation;
+        --
+        ln_account_id := lr_account_validation;
+        --
+        IF ln_account_id IS NULL THEN
+          g_err_msg := g_err_msg||'Account Segments are Invalid'||chr(10);
+        END IF;
+        --
+        */
+
+        IF lr_validate_rcd.AMOUNT_DR  IS NOT NULL AND lr_validate_rcd.AMOUNT_DR <> 0 THEN
+          IF lr_validate_rcd.AMOUNT_CR IS NOT NULL AND lr_validate_rcd.AMOUNT_CR <> 0 THEN
+            g_err_msg := g_err_msg||'Enter either AMOUNT_DR  or AMOUNT_CR'||CHR(10);
+          END IF;
+        ELSIF
+          lr_validate_rcd.AMOUNT_DR  IS NULL OR lr_validate_rcd.AMOUNT_DR=0 THEN
+          IF lr_validate_rcd.AMOUNT_CR IS NULL OR lr_validate_rcd.AMOUNT_CR = 0 THEN
+            g_err_msg := g_err_msg||'Provide value for either AMOUNT_DR  or AMOUNT_CR'||CHR(10);
+          END IF;
+        END IF;
+        --
+
+        IF g_err_msg IS NOT NULL THEN
+          UPDATE XXxx_GL_INTERFACE
+          SET PROCESSED_STATUS = 'E'
+          ,ERROR_MESSAGE = g_err_msg
+          WHERE ROWID = lr_validate_rcd.ROW_ID;
+          --
+          g_err_loc := 'RECORD VALIDATION Table: XXxx_GL_INTERFACE- '||'Line '||i||' of '||lr_validate_rcd.TRANSACTION_NUMBER||CHR(10);
+          print_msg('LOG',g_err_loc||g_err_msg);
+      COMMIT;
+        ELSE
+          UPDATE XXxx_GL_INTERFACE
+          SET PROCESSED_STATUS = 'V'
+          ,ERROR_MESSAGE = g_err_msg
+          WHERE ROWID = lr_validate_rcd.ROW_ID;
+          --
+         -- print_msg('OUTPUT','RECORD VALIDATION Table: XXxx_GL_INTERFACE- '||'Line '||i||' of '||lr_validate_rcd.TRANSACTION_NUMBER||CHR(10)
+         --                   ||'No Error Found');
+          COMMIT;
+        END IF;
+        --
+      END LOOP;
+  ------
+   IF lr_chk_rcd_exist.total > 150000 THEN
+   FOR lr_validate_rcd IN cur_validate_rcd(p_source) LOOP
+        EXIT WHEN cur_validate_rcd%NOTFOUND;
+        --
+        EXIT WHEN cur_validate_rcd%ROWCOUNT> 250000;
+
+        g_err_msg := NULL;
+        ln_currency_code  := NULL;
+        ln_ledger_id      := NULL;
+        ln_coa_id         := NULL;
+        ln_je_category    := NULL;
+        ln_je_source      := NULL;
+        ln_account_id     := NULL;
+        ln_budget_id      := NULL;
+        ln_encumbrance_id := NULL;
+        ln_sob_currency   := NULL;
+        ln_conversion_type := NULL;
+        ln_cc_conv_rate    := NULL;
+        --
+        i := i+1;
+        --
+        IF lr_validate_rcd.status IS NULL THEN
+          g_err_msg := 'STATUS is null'||CHR(10);
+        END IF;
+        --
+        IF lr_validate_rcd.currency_code IS NULL THEN
+          g_err_msg := g_err_msg||'Currency Code is null'||CHR(10);
+        ELSE
+          OPEN cur_cc_validate(lr_validate_rcd.currency_code);
+          FETCH cur_cc_validate INTO lr_cc_validate;
+          CLOSE cur_cc_validate;
+          --
+          ln_currency_code := lr_cc_validate;
+          --
+          IF ln_currency_code IS NULL THEN
+            g_err_msg := g_err_msg||'Currency Code is Invalid'||CHR(10);
+          END IF;
+        END IF;
+        --
+
+        IF lr_validate_rcd.LEDGER_ID IS NULL THEN
+          g_err_msg := g_err_msg||'LEDGER_ID is null'||CHR(10);
+        ELSE
+          OPEN cur_sob_validation(lr_validate_rcd.LEDGER_ID);
+          FETCH cur_sob_validation INTO lr_sob_validation;
+          --
+          ln_ledger_id := lr_sob_validation.sb ;
+          ln_coa_id    := lr_sob_validation.coa ;
+          ln_sob_currency := lr_sob_validation.cc;
+          --
+          IF ln_ledger_id IS NULL THEN
+            g_err_msg := g_err_msg||'LEDGER_ID is Invalid'||CHR(10);
+          END IF;
+          CLOSE cur_sob_validation;
+        END IF;
+        --
+        IF ln_sob_currency <> ln_currency_code AND ln_currency_code <> 'STAT' THEN
+           IF lr_validate_rcd.CURRENCY_CONVERSION_RATE_TYPE IS NULL THEN
+              g_err_msg := g_err_msg||'Conversion Rate Type is Null'||CHR(10);
+           ELSE
+             OPEN cur_conv_type_validate(lr_validate_rcd.CURRENCY_CONVERSION_RATE_TYPE);
+             FETCH cur_conv_type_validate INTO lr_conv_type_validate;
+
+             --
+             ln_conversion_type := lr_conv_type_validate;
+             CLOSE cur_conv_type_validate;
+
+             IF ln_conversion_type IS NULL THEN
+               g_err_msg := g_err_msg||'Conversion Rate Type is Invalid'||CHR(10);
+             ELSIF ln_conversion_type = 'User' THEN
+               IF lr_validate_rcd.CURRENCY_CONVERSION_RATE IS NULL OR lr_validate_rcd.CURRENCY_CONVERSION_RATE =0 THEN
+                 g_err_msg := g_err_msg||'Conversion Rate is null'||CHR(10);
+               END IF;
+             ELSIF lr_validate_rcd.CURRENCY_CONVERSION_RATE IS NOT NULL THEN
+                g_err_msg := g_err_msg||'Conversion Rate should be null'||CHR(10);
+             END IF;
+             --
+             IF lr_validate_rcd.CURRENCY_CONVERSION_DATE IS NULL THEN
+               g_err_msg := g_err_msg||'currency Conversion Date is Null'||CHR(10);
+             ELSE
+               BEGIN
+                  SELECT gdr.conversion_rate
+                  INTO ln_cc_conv_rate
+                  FROM gl_daily_rates gdr
+                  WHERE gdr.conversion_type = lr_validate_rcd.CURRENCY_CONVERSION_RATE_TYPE
+                  AND   gdr.from_currency   = lr_validate_rcd.currency_code
+                  AND   gdr.to_currency     = ln_sob_currency
+                  AND   gdr.conversion_date = lr_validate_rcd.CURRENCY_CONVERSION_DATE;
+
+               EXCEPTION
+                 WHEN OTHERS THEN
+                    ln_cc_conv_rate := NULL;
+               END;
+               IF ln_cc_conv_rate IS NULL THEN
+                 g_err_msg := g_err_msg||'Invalid currency Conversion Date'||CHR(10);
+               END IF;
+             END IF;
+          END IF;
+        END IF;
+        --
+        IF lr_validate_rcd.actual_flag IS NULL THEN
+          g_err_msg := g_err_msg||'Actual Flag is null'||CHR(10);
+        ELSE
+          OPEN cur_ac_flag_validation(lr_validate_rcd.actual_flag);
+          FETCH cur_ac_flag_validation INTO lr_ac_flag_validation;
+          CLOSE cur_ac_flag_validation;
+          --
+          IF lr_ac_flag_validation = 2 THEN
+            g_err_msg := g_err_msg||'Actual Flag is Invalid'||CHR(10);
+          ELSIF
+            lr_validate_rcd.actual_flag = 'B' THEN
+            IF lr_validate_rcd.budget_name IS NULL THEN
+              g_err_msg := g_err_msg||'Budget Name is Null'||CHR(10);
+            ELSIF
+              lr_validate_rcd.period IS NULL THEN
+                g_err_msg := g_err_msg||'Period is Null'||CHR(10);
+            ELSE
+              OPEN cur_budget_id_validation(lr_validate_rcd.budget_name);
+              FETCH cur_budget_id_validation INTO lr_budget_id_validation;
+              CLOSE cur_budget_id_validation;
+              --
+              ln_budget_id := lr_budget_id_validation;
+              --
+              IF ln_budget_id IS NULL THEN
+                g_err_msg := g_err_msg||'Budget Name is Invalid'||CHR(10);
+              END IF;
+              --
+              OPEN cur_gl_periods(lr_validate_rcd.period,ln_ledger_id);
+              FETCH cur_gl_periods INTO lr_gl_periods;
+              CLOSE cur_gl_periods;
+              IF lr_gl_periods IS NULL THEN
+                g_err_msg := g_err_msg||'Period is Invalid'||CHR(10);
+              END IF;
+            END IF;
+          ELSIF
+            lr_validate_rcd.actual_flag = 'E' THEN
+            --
+            IF lr_validate_rcd.encumbrance_type IS NULL THEN
+              g_err_msg := g_err_msg||'Encumbrance type is Null'||CHR(10);
+            ELSE
+              OPEN cur_encumbrance_id_validate(lr_validate_rcd.encumbrance_type);
+              FETCH cur_encumbrance_id_validate INTO lr_encumbrance_id_validate;
+              CLOSE cur_encumbrance_id_validate;
+              --
+              ln_encumbrance_id := lr_encumbrance_id_validate;
+              --
+              IF ln_encumbrance_id IS NULL THEN
+                g_err_msg := g_err_msg||'Encumbrance type is Invalid'||CHR(10);
+              END IF;
+            END IF;
+          END IF;
+        END IF;
+        --
+        IF lr_validate_rcd.ACCOUNTING_DATE IS NULL THEN
+          g_err_msg := g_err_msg||'ACCOUNTING_DATE is null'||CHR(10);
+        END IF;
+        --
+        IF lr_validate_rcd.USER_JE_CATEGORY_NAME IS NULL THEN
+          g_err_msg := g_err_msg||'User Category id is null'||CHR(10);
+        ELSE
+          OPEN cur_cat_validation(lr_validate_rcd.USER_JE_CATEGORY_NAME);
+          FETCH cur_cat_validation INTO lr_cat_validation;
+          --
+          ln_je_category := lr_cat_validation;
+          --
+          IF lr_cat_validation IS NULL THEN
+            g_err_msg := g_err_msg||'User Category id is Invalid'||CHR(10);
+          END IF;
+          CLOSE cur_cat_validation;
+        END IF;
+        --
+        IF lr_validate_rcd.USER_JE_SOURCE_NAME IS NULL THEN
+          g_err_msg := g_err_msg||'User Source Name is null'||CHR(10);
+        ELSE
+          /*
+          OPEN cur_src_validation(lr_validate_rcd.USER_JE_SOURCE_NAME);
+          FETCH cur_src_validation INTO lr_src_validation;
+          CLOSE cur_src_validation;
+          --
+          ln_je_source := lr_src_validation;
+         */
+          --
+          BEGIN
+           SELECT GS.user_je_source_name
+           INTO ln_je_source
+           FROM  gl_je_sources GS
+           WHERE GS.user_je_source_name = lr_validate_rcd.USER_JE_SOURCE_NAME;
+          EXCEPTION
+            WHEN OTHERS THEN
+               ln_je_source := NULL;
+          END;
+
+          IF ln_je_source IS NULL THEN
+            g_err_msg := g_err_msg||'User Source Name is Invalid'||CHR(10);
+          END IF;
+        END IF;
+        --
+        IF lr_validate_rcd.ACCOUNTING_DATE IS NULL THEN
+          g_err_msg := g_err_msg||'Accounting Date is null'||CHR(10);
+        ELSE
+          OPEN cur_chk_period_st(lr_validate_rcd.ACCOUNTING_DATE
+                                ,lr_sob_validation.sb
+                                );
+          FETCH cur_chk_period_st INTO lr_chk_period_st;
+          CLOSE cur_chk_period_st;
+          --
+          IF lr_chk_period_st IS NULL THEN
+            g_err_msg := g_err_msg||'GL Period is not open for Accounting Date'||CHR(10);
+          END IF;
+        END IF;
+      --
+        /*
+        OPEN cur_account_validation(lr_validate_rcd.ROW_ID
+                                   ,lr_sob_validation.coa
+                                   );
+        FETCH cur_account_validation INTO lr_account_validation;
+        CLOSE cur_account_validation;
+        --
+        ln_account_id := lr_account_validation;
+        --
+        IF ln_account_id IS NULL THEN
+          g_err_msg := g_err_msg||'Account Segments are Invalid'||chr(10);
+        END IF;
+        --
+        */
+
+        IF lr_validate_rcd.AMOUNT_DR  IS NOT NULL AND lr_validate_rcd.AMOUNT_DR <> 0 THEN
+          IF lr_validate_rcd.AMOUNT_CR IS NOT NULL AND lr_validate_rcd.AMOUNT_CR <> 0 THEN
+            g_err_msg := g_err_msg||'Enter either AMOUNT_DR  or AMOUNT_CR'||CHR(10);
+          END IF;
+        ELSIF
+          lr_validate_rcd.AMOUNT_DR  IS NULL OR lr_validate_rcd.AMOUNT_DR=0 THEN
+          IF lr_validate_rcd.AMOUNT_CR IS NULL OR lr_validate_rcd.AMOUNT_CR = 0 THEN
+            g_err_msg := g_err_msg||'Provide value for either AMOUNT_DR  or AMOUNT_CR'||CHR(10);
+          END IF;
+        END IF;
+        --
+
+        IF g_err_msg IS NOT NULL THEN
+          UPDATE XXxx_GL_INTERFACE
+          SET PROCESSED_STATUS = 'E'
+          ,ERROR_MESSAGE = g_err_msg
+          WHERE ROWID = lr_validate_rcd.ROW_ID;
+          --
+          g_err_loc := 'RECORD VALIDATION Table: XXxx_GL_INTERFACE- '||'Line '||i||' of '||lr_validate_rcd.TRANSACTION_NUMBER||CHR(10);
+          print_msg('LOG',g_err_loc||g_err_msg);
+      COMMIT;
+        ELSE
+          UPDATE XXxx_GL_INTERFACE
+          SET PROCESSED_STATUS = 'V'
+          ,ERROR_MESSAGE = g_err_msg
+          WHERE ROWID = lr_validate_rcd.ROW_ID;
+          --
+         -- print_msg('OUTPUT','RECORD VALIDATION Table: XXxx_GL_INTERFACE- '||'Line '||i||' of '||lr_validate_rcd.TRANSACTION_NUMBER||CHR(10)
+         --                   ||'No Error Found');
+          COMMIT;
+        END IF;
+        --
+      END LOOP;
+   END IF;
+  --
+   FOR lr_distinct_transaction IN  cur_distinct_transaction(p_source)
+     LOOP
+       ln_dr_amt_total := 0;
+       ln_cr_amt_total := 0;
+     FOR lr_unbalanced_journal_rcd IN cur_check_unbalanced_journal(lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                                                                  ,lr_distinct_transaction.ACCOUNTING_DATE
+                                                                  ,lr_distinct_transaction.CURRENCY_CODE
+                                                                  ,p_source
+                                                                  )
+       LOOP
+          EXIT WHEN cur_check_unbalanced_journal%NOTFOUND;
+
+          ln_sob_currency := NULL;
+          ln_dr_fc_amt := 0;
+          ln_cr_fc_amt := 0;
+          --
+          OPEN cur_sob_validation(lr_unbalanced_journal_rcd.LEDGER_ID);
+          FETCH cur_sob_validation INTO lr_sob_validation;
+          --
+          ln_sob_currency := lr_sob_validation.cc;
+
+          CLOSE cur_sob_validation;
+          --
+         IF lr_unbalanced_journal_rcd.CURRENCY_CODE = ln_sob_currency OR lr_unbalanced_journal_rcd.CURRENCY_CODE = 'STAT' THEN
+            IF lr_unbalanced_journal_rcd.AMOUNT_DR IS NULL THEN
+              ln_dr_amt_total := ln_dr_amt_total+ 0;
+             ELSE
+               ln_dr_amt_total := ln_dr_amt_total+lr_unbalanced_journal_rcd.AMOUNT_DR;
+             END IF;
+            --
+            IF lr_unbalanced_journal_rcd.AMOUNT_CR IS NULL THEN
+               ln_cr_amt_total := ln_cr_amt_total+ 0;
+             ELSE
+               ln_cr_amt_total := ln_cr_amt_total+lr_unbalanced_journal_rcd.AMOUNT_CR;
+            END IF;
+          ELSE
+           IF lr_unbalanced_journal_rcd.CURRENCY_CODE <> 'STAT' THEN
+
+            IF lr_unbalanced_journal_rcd.AMOUNT_DR IS NULL THEN
+              ln_dr_amt_total := ln_dr_amt_total+ 0;
+            ELSE
+              BEGIN
+                SELECT (CONVERSION_RATE*lr_unbalanced_journal_rcd.AMOUNT_DR)
+                INTO ln_dr_fc_amt
+                FROM gl_daily_rates
+                WHERE FROM_CURRENCY = lr_unbalanced_journal_rcd.CURRENCY_CODE
+                AND   TO_CURRENCY = ln_sob_currency
+                AND CONVERSION_DATE = lr_unbalanced_journal_rcd.CURRENCY_CONVERSION_DATE
+                AND conversion_type = lr_unbalanced_journal_rcd.CURRENCY_CONVERSION_RATE_TYPE ;
+                --
+              EXCEPTION
+                WHEN OTHERS THEN
+                    ln_dr_fc_amt := 0;
+              END;
+              --
+              ln_dr_amt_total := ln_dr_amt_total+ln_dr_fc_amt;
+            END IF;
+            --
+            IF lr_unbalanced_journal_rcd.AMOUNT_CR IS NULL THEN
+              ln_cr_amt_total := ln_cr_amt_total+ 0;
+            ELSE
+              BEGIN
+                SELECT (CONVERSION_RATE*lr_unbalanced_journal_rcd.AMOUNT_CR)
+                INTO ln_cr_fc_amt
+                FROM gl_daily_rates
+                WHERE FROM_CURRENCY = lr_unbalanced_journal_rcd.CURRENCY_CODE
+                AND   TO_CURRENCY = ln_sob_currency
+                AND CONVERSION_DATE = lr_unbalanced_journal_rcd.CURRENCY_CONVERSION_DATE
+                AND conversion_type = lr_unbalanced_journal_rcd.CURRENCY_CONVERSION_RATE_TYPE ;
+                --
+              EXCEPTION
+                WHEN OTHERS THEN
+                    ln_cr_fc_amt := 0;
+              END;
+              --
+              ln_cr_amt_total := ln_cr_amt_total+ln_cr_fc_amt;
+            END IF;
+           END IF;
+          END IF;
+       END LOOP;
+     --
+
+     IF ln_dr_amt_total <> ln_cr_amt_total THEN
+
+      IF lr_distinct_transaction.USER_JE_CATEGORY_NAME = 'INGENIUM' THEN
+
+        IF NVL(ln_dr_amt_total,0) > NVL(ln_cr_amt_total,0) THEN
+          IF lr_distinct_transaction.CURRENCY_CODE <> 'STAT' THEN
+
+          INSERT INTO XXxx_GL_INTERFACE(STATUS
+                                         ,LEDGER_ID
+                                         ,ACCOUNTING_DATE
+                                         ,ACTUAL_FLAG
+                                         ,USER_JE_CATEGORY_NAME
+                                         ,USER_JE_SOURCE_NAME
+                                         ,SEGMENT_1
+                                         ,SEGMENT_2
+                                         ,SEGMENT_3
+                                         ,SEGMENT_4
+                                         ,SEGMENT_5
+                                         ,SEGMENT_6
+                                         ,SEGMENT_7
+                                         ,SEGMENT_8
+                                         ,SEGMENT_9
+                                         ,AMOUNT_CR
+                                         ,CURRENCY_CODE
+                                         ,PROCESSED_STATUS
+                                         )
+                                  VALUES('NEW'
+                                         ,lr_distinct_transaction.LEDGER_ID
+                                         ,lr_distinct_transaction.ACCOUNTING_DATE
+                                         ,'A'
+                                         ,lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                                         ,lr_distinct_transaction.USER_JE_SOURCE_NAME
+                                         ,'101'
+                                         ,'342407'
+                                         ,'0700'
+                                         ,'ZZZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,(NVL(ln_dr_amt_total,0)-NVL(ln_cr_amt_total,0))
+                                         ,'INR'
+                                         ,'V'
+                                         );
+         COMMIT;
+          ELSE
+              INSERT INTO XXxx_GL_INTERFACE(STATUS
+                                         ,LEDGER_ID
+                                         ,ACCOUNTING_DATE
+                                         ,ACTUAL_FLAG
+                                         ,USER_JE_CATEGORY_NAME
+                                         ,USER_JE_SOURCE_NAME
+                                         ,SEGMENT_1
+                                         ,SEGMENT_2
+                                         ,SEGMENT_3
+                                         ,SEGMENT_4
+                                         ,SEGMENT_5
+                                         ,SEGMENT_6
+                                         ,SEGMENT_7
+                                         ,SEGMENT_8
+                                         ,SEGMENT_9
+                                         ,AMOUNT_CR
+                                         ,CURRENCY_CODE
+                                         ,PROCESSED_STATUS
+                                         )
+                                  VALUES('NEW'
+                                         ,lr_distinct_transaction.LEDGER_ID
+                                         ,lr_distinct_transaction.ACCOUNTING_DATE
+                                         ,'A'
+                                         ,lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                                         ,lr_distinct_transaction.USER_JE_SOURCE_NAME
+                                         ,'101'
+                                         ,'911325'
+                                         ,'0700'
+                                         ,'ZZZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,(NVL(ln_dr_amt_total,0)-NVL(ln_cr_amt_total,0))
+                                         ,'STAT'
+                                         ,'V'
+                                         );
+           COMMIT;
+          END IF;
+        ELSE
+          IF lr_distinct_transaction.CURRENCY_CODE <> 'STAT' THEN
+          INSERT INTO XXxx_GL_INTERFACE(STATUS
+                                         ,LEDGER_ID
+                                         ,ACCOUNTING_DATE
+                                         ,ACTUAL_FLAG
+                                         ,USER_JE_CATEGORY_NAME
+                                         ,USER_JE_SOURCE_NAME
+                                         ,SEGMENT_1
+                                         ,SEGMENT_2
+                                         ,SEGMENT_3
+                                         ,SEGMENT_4
+                                         ,SEGMENT_5
+                                         ,SEGMENT_6
+                                         ,SEGMENT_7
+                                         ,SEGMENT_8
+                                         ,SEGMENT_9
+                                         ,AMOUNT_DR
+                                         ,CURRENCY_CODE
+                                         ,PROCESSED_STATUS
+                                         )
+                                  VALUES('NEW'
+                                         ,lr_distinct_transaction.LEDGER_ID
+                                         ,lr_distinct_transaction.ACCOUNTING_DATE
+                                         ,'A'
+                                         ,lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                                         ,lr_distinct_transaction.USER_JE_SOURCE_NAME
+                                         ,'101'
+                                         ,'342407'
+                                         ,'0700'
+                                         ,'ZZZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,(NVL(ln_cr_amt_total,0)-NVL(ln_dr_amt_total,0))
+                                         ,'INR'
+                                         ,'V'
+                                         );
+         COMMIT;
+         ELSE
+            INSERT INTO XXxx_GL_INTERFACE(STATUS
+                                         ,LEDGER_ID
+                                         ,ACCOUNTING_DATE
+                                         ,ACTUAL_FLAG
+                                         ,USER_JE_CATEGORY_NAME
+                                         ,USER_JE_SOURCE_NAME
+                                         ,SEGMENT_1
+                                         ,SEGMENT_2
+                                         ,SEGMENT_3
+                                         ,SEGMENT_4
+                                         ,SEGMENT_5
+                                         ,SEGMENT_6
+                                         ,SEGMENT_7
+                                         ,SEGMENT_8
+                                         ,SEGMENT_9
+                                         ,AMOUNT_DR
+                                         ,CURRENCY_CODE
+                                         ,PROCESSED_STATUS
+                                         )
+                                  VALUES('NEW'
+                                         ,lr_distinct_transaction.LEDGER_ID
+                                         ,lr_distinct_transaction.ACCOUNTING_DATE
+                                         ,'A'
+                                         ,lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                                         ,lr_distinct_transaction.USER_JE_SOURCE_NAME
+                                         ,'101'
+                                         ,'911325'
+                                         ,'0700'
+                                         ,'ZZZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,(NVL(ln_cr_amt_total,0)-NVL(ln_dr_amt_total,0))
+                                         ,'STAT'
+                                         ,'V'
+                                         );
+         COMMIT;
+         END IF;
+        END IF;
+      ELSIF lr_distinct_transaction.USER_JE_CATEGORY_NAME = 'RURAL' THEN
+         IF NVL(ln_dr_amt_total,0) > NVL(ln_cr_amt_total,0) THEN
+           INSERT INTO XXxx_GL_INTERFACE(STATUS
+                                         ,LEDGER_ID
+                                         ,ACCOUNTING_DATE
+                                         ,ACTUAL_FLAG
+                                         ,USER_JE_CATEGORY_NAME
+                                         ,USER_JE_SOURCE_NAME
+                                         ,SEGMENT_1
+                                         ,SEGMENT_2
+                                         ,SEGMENT_3
+                                         ,SEGMENT_4
+                                         ,SEGMENT_5
+                                         ,SEGMENT_6
+                                         ,SEGMENT_7
+                                         ,SEGMENT_8
+                                         ,SEGMENT_9
+                                         ,AMOUNT_CR
+                                         ,CURRENCY_CODE
+                                         ,PROCESSED_STATUS
+                                         )
+                                  VALUES('NEW'
+                                         ,lr_distinct_transaction.LEDGER_ID
+                                         ,lr_distinct_transaction.ACCOUNTING_DATE
+                                         ,'A'
+                                         ,lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                                         ,lr_distinct_transaction.USER_JE_SOURCE_NAME
+                                         ,'101'
+                                         ,'342425'
+                                         ,'0700'
+                                         ,'ZZZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,(NVL(ln_dr_amt_total,0)-NVL(ln_cr_amt_total,0))
+                                         ,'INR'
+                                         ,'V'
+                                         );
+         COMMIT;
+         ELSE
+            INSERT INTO XXxx_GL_INTERFACE(STATUS
+                                         ,LEDGER_ID
+                                         ,ACCOUNTING_DATE
+                                         ,ACTUAL_FLAG
+                                         ,USER_JE_CATEGORY_NAME
+                                         ,USER_JE_SOURCE_NAME
+                                         ,SEGMENT_1
+                                         ,SEGMENT_2
+                                         ,SEGMENT_3
+                                         ,SEGMENT_4
+                                         ,SEGMENT_5
+                                         ,SEGMENT_6
+                                         ,SEGMENT_7
+                                         ,SEGMENT_8
+                                         ,SEGMENT_9
+                                         ,AMOUNT_DR
+                                         ,CURRENCY_CODE
+                                         ,PROCESSED_STATUS
+                                         )
+                                  VALUES('NEW'
+                                         ,lr_distinct_transaction.LEDGER_ID
+                                         ,lr_distinct_transaction.ACCOUNTING_DATE
+                                         ,'A'
+                                         ,lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                                         ,lr_distinct_transaction.USER_JE_SOURCE_NAME
+                                         ,'101'
+                                         ,'342425'
+                                         ,'0700'
+                                         ,'ZZZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZZ'
+                                         ,'ZZZ'
+                                         ,'ZZZ'
+                                         ,(NVL(ln_cr_amt_total,0)-NVL(ln_dr_amt_total,0))
+                                         ,'INR'
+                                         ,'V'
+                                         );
+         COMMIT;
+         END IF;
+      ELSE
+        UPDATE XXxx_GL_INTERFACE
+        SET PROCESSED_STATUS = 'U'
+        ,ERROR_MESSAGE = g_err_msg||'Unbalanced Transaction'
+        WHERE USER_JE_CATEGORY_NAME = lr_distinct_transaction.USER_JE_CATEGORY_NAME
+        AND   ACCOUNTING_DATE     = lr_distinct_transaction.ACCOUNTING_DATE
+        AND   CURRENCY_CODE       = lr_distinct_transaction.CURRENCY_CODE
+        AND PROCESSED_STATUS = 'V';
+       --
+       COMMIT;
+       --
+       g_err_loc := 'RECORD VALIDATION Table: XXxx_GL_INTERFACE- '||lr_distinct_transaction.USER_JE_CATEGORY_NAME||' -
+                    '||lr_distinct_transaction.ACCOUNTING_DATE||CHR(10);
+       print_msg('LOG',g_err_loc||g_err_msg||'Unbalanced Transaction');
+      END IF;
+     ELSE
+       print_msg('OUTPUT','Source: '||lr_distinct_transaction.USER_JE_CATEGORY_NAME||' - '||lr_distinct_transaction.ACCOUNTING_DATE - 'No Error Found');
+     END IF;
+
+ END LOOP;
+
+    END IF;
+  EXCEPTION
+    WHEN OTHERS THEN
+      g_err_msg := SQLERRM;
+      print_msg('LOG','Procedure validate_record has thrown exception'||CHR(10)||g_err_msg);
+  END validate_record;
+-----------End of Procedure validate_record--------------------
+  -- +==============================================================================+
+  -- | Name        : get_sob_id                                                     |
+  -- |                                                                              |
+  -- | Description : The Function is to get set_of_books_id                         |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- | Parameters  : p_sob IN VARCHAR2                                              |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+  FUNCTION get_sob_id(p_sob IN VARCHAR2)
+  RETURN NUMBER
+  IS
+  ln_sob_id NUMBER;
+  BEGIN
+    SELECT set_of_books_id
+    INTO ln_sob_id
+    FROM gl_sets_of_books
+    WHERE name = p_sob;
+    --
+    RETURN ln_sob_id;
+  EXCEPTION
+    WHEN OTHERS THEN
+       RETURN NULL;
+  END get_sob_id;
+  --
+  -- +==============================================================================+
+  -- | Name        : get_budget_id                                                  |
+  -- |                                                                              |
+  -- | Description : The Function is to get budget_version_id                       |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- | Parameters  : p_budget_name IN VARCHAR2                                      |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+  FUNCTION get_budget_id(p_budget_name IN VARCHAR2)
+  RETURN NUMBER
+  IS
+  ln_budget_id NUMBER;
+  BEGIN
+    SELECT budget_version_id
+    INTO ln_budget_id
+    FROM gl_budget_versions
+    WHERE budget_name = p_budget_name
+    AND   status IN ('C','O');
+    --
+    RETURN ln_budget_id;
+  EXCEPTION
+    WHEN OTHERS THEN
+       RETURN NULL;
+  END get_budget_id;
+  --
+  -- +==============================================================================+
+  -- | Name        : get_encumbrance_id                                             |
+  -- |                                                                              |
+  -- | Description : The Function is to get encumbrance_type_id                     |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- | Parameters  : p_encumbrance_type IN VARCHAR2                                 |
+  -- |                                                                              |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+  FUNCTION get_encumbrance_id(p_encumbrance_type IN VARCHAR2)
+  RETURN NUMBER
+  IS
+  ln_encumbrance_id NUMBER;
+  BEGIN
+    SELECT encumbrance_type_id
+    INTO ln_encumbrance_id
+    FROM gl_encumbrance_types
+    WHERE encumbrance_type = p_encumbrance_type;
+    --
+    RETURN ln_encumbrance_id;
+  EXCEPTION
+    WHEN OTHERS THEN
+       RETURN NULL;
+  END get_encumbrance_id;
+  --
+-- Procedure to Process records from staging table to interface tables
+  -- +==============================================================================+
+  -- | Name        : insert_record                                                  |
+  -- |                                                                              |
+  -- | Description : The procedure is to transfer validated record from staging to  |
+  -- |               interface tables                                               |
+  -- |                                                                              |
+  -- | Parameters  : x_err_buf    OUT VARCHAR2                                      |
+  -- |               x_ret_code   OUT VARCHAR2                                      |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                  Shashi Gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+
+  PROCEDURE insert_record(x_err_buf  OUT VARCHAR2
+                         ,x_ret_code OUT VARCHAR2
+                         ,p_source   IN  VARCHAR2
+                         )
+  IS
+  CURSOR cur_insert_rcd(P_CAT_NAME IN VARCHAR2
+                       ,P_DATE     IN DATE
+                       ,p_source   IN  VARCHAR2
+                       ) IS
+  SELECT XGIST.ROWID row_id,XGIST.*
+  FROM XXxx_GL_INTERFACE XGIST
+  WHERE XGIST.PROCESSED_STATUS = 'V'
+   AND  XGIST.USER_JE_CATEGORY_NAME = P_CAT_NAME
+   AND  XGIST.ACCOUNTING_DATE     = P_DATE
+   AND  XGIST.USER_JE_CATEGORY_NAME = p_source;
+  --
+  CURSOR cur_distinct_transaction(p_source   IN  VARCHAR2)
+  IS
+  SELECT DISTINCT ACCOUNTING_DATE,USER_JE_CATEGORY_NAME
+  FROM XXxx_GL_INTERFACE
+  WHERE PROCESSED_STATUS = 'V'
+  AND USER_JE_CATEGORY_NAME = p_source;
+  --
+  lr_insert_rcd   cur_insert_rcd%ROWTYPE;
+  lr_distinct_transaction  cur_distinct_transaction%ROWTYPE;
+  ln_request_id   NUMBER   := 0;
+  i               NUMBER   := 0;
+  SRC_NAME        VARCHAR2(100);
+  ln_ledger_id    NUMBER;
+  ln_sob_id       NUMBER;
+  ln_budget_id    NUMBER   := NULL;
+  ln_encumbrance_id NUMBER := NULL;
+  v_GROUP_ID  NUMBER;
+  irun_id     NUMBER;
+  lv_product  VARCHAR2(50);
+  --
+  BEGIN
+    OPEN cur_distinct_transaction(p_source);
+    LOOP
+     FETCH cur_distinct_transaction INTO lr_distinct_transaction;
+     EXIT WHEN cur_distinct_transaction%NOTFOUND;
+      SELECT GL_INTERFACE_CONTROL_S.NEXTVAL INTO v_GROUP_ID FROM DUAL;
+      SELECT gl_journal_import_s.NEXTVAL  INTO irun_id  FROM DUAL;
+    OPEN cur_insert_rcd(lr_distinct_transaction.USER_JE_CATEGORY_NAME
+                       ,lr_distinct_transaction.ACCOUNTING_DATE
+                       ,p_source
+                       );
+    LOOP
+      FETCH cur_insert_rcd INTO lr_insert_rcd;
+      EXIT WHEN cur_insert_rcd%NOTFOUND;
+      --
+      g_err_msg := NULL;
+      lv_product := NULL;
+      --
+      --ln_sob_id := get_sob_id(lr_insert_rcd.sob_name);
+      --
+      IF lr_insert_rcd.budget_name IS NOT NULL THEN
+        ln_budget_id := get_budget_id(lr_insert_rcd.budget_name);
+      END IF;
+      --
+      IF lr_insert_rcd.encumbrance_type IS NOT NULL THEN
+        ln_encumbrance_id := get_encumbrance_id(lr_insert_rcd.encumbrance_type);
+      END IF;
+      --
+      BEGIN
+        SELECT DESCRIPTION
+        INTO lv_product
+        FROM FND_LOOKUP_VALUES_VL
+        WHERE LOOKUP_TYPE = lr_insert_rcd.USER_JE_CATEGORY_NAME
+        AND MEANING = trim(lr_insert_rcd.segment_6);
+      EXCEPTION
+        when others then
+         lv_product := NULL;
+      END;
+
+      INSERT INTO GL_INTERFACE(status
+                              ,SET_OF_BOOKS_ID
+                              ,GROUP_ID
+                              ,user_je_source_name
+                              ,user_je_category_name
+                              ,accounting_date
+                              ,currency_code
+                              ,date_created
+                              ,created_by
+                              ,actual_flag
+                              ,user_currency_conversion_type
+                              ,currency_conversion_rate
+                              ,CURRENCY_CONVERSION_DATE
+                              ,entered_dr
+                              ,entered_cr
+                              ,budget_version_id
+                              ,encumbrance_type_id
+                              ,period_name
+                              ,segment1
+                              ,segment2
+                              ,segment3
+                              ,segment4
+                              ,segment5
+                              ,segment6
+                              ,segment7
+                              ,segment8
+                              ,segment9
+                              --,segment10
+                              --,segment11
+                              ,REFERENCE10
+                              --,REFERENCE4
+                              ,JGZZ_RECON_REF
+                              ,ATTRIBUTE1
+                              ,ATTRIBUTE2
+                              ,ATTRIBUTE3
+                              ,ATTRIBUTE4
+                              ,ATTRIBUTE5
+                              ,ATTRIBUTE6
+                              ,ATTRIBUTE7
+                              ,ATTRIBUTE8
+                              ,ATTRIBUTE9
+                              ,ATTRIBUTE10
+                              ,context
+                              )
+                        VALUES(lr_insert_rcd.status
+                              ,lr_insert_rcd.LEDGER_ID
+                              ,v_GROUP_ID
+                              ,lr_insert_rcd.USER_JE_SOURCE_NAME
+                              ,lr_insert_rcd.USER_JE_CATEGORY_NAME
+                              ,NVL(lr_insert_rcd.ACCOUNTING_DATE,SYSDATE)
+                              ,lr_insert_rcd.currency_code
+                              ,NVL(lr_insert_rcd.DATE_CREATED,SYSDATE)
+                              ,NVL(lr_insert_rcd.CREATED_BY,fnd_global.user_id)
+                              ,lr_insert_rcd.actual_flag
+                              ,lr_insert_rcd.CURRENCY_CONVERSION_RATE_TYPE
+                              ,lr_insert_rcd.CURRENCY_CONVERSION_RATE
+                              ,lr_insert_rcd.CURRENCY_CONVERSION_DATE
+                              ,DECODE(lr_insert_rcd.AMOUNT_DR,0,NULL,lr_insert_rcd.AMOUNT_DR)
+                              ,DECODE(lr_insert_rcd.AMOUNT_CR,0,NULL,lr_insert_rcd.AMOUNT_CR)
+                              ,ln_budget_id
+                              ,ln_encumbrance_id
+                              ,lr_insert_rcd.period
+                              ,lr_insert_rcd.segment_1
+                              ,lr_insert_rcd.segment_2
+                              ,lr_insert_rcd.segment_3
+                              ,lr_insert_rcd.segment_4
+                              ,lr_insert_rcd.segment_5
+                              ,NVL(lv_product,trim(lr_insert_rcd.segment_6))
+                              ,lr_insert_rcd.segment_7
+                              ,lr_insert_rcd.segment_8
+                              ,lr_insert_rcd.segment_9
+                              --,lr_insert_rcd.segment_10
+                              --,lr_insert_rcd.segment_11
+                              ,NVL(lr_insert_rcd.reference10,SUBSTR(lr_insert_rcd.TRANSACTION_NUMBER,1,240))
+                              --,SUBSTR(lr_insert_rcd.TRANSACTION_NUMBER,1,240)
+                              ,lr_insert_rcd.JGZZ_RECON_REF
+                              ,lr_insert_rcd.ATTRIBUTE1
+                              ,lr_insert_rcd.ATTRIBUTE2
+                              ,lr_insert_rcd.ATTRIBUTE3
+                              ,lr_insert_rcd.ATTRIBUTE4
+                              ,lr_insert_rcd.ATTRIBUTE5
+                              ,lr_insert_rcd.ATTRIBUTE6
+                              ,lr_insert_rcd.ATTRIBUTE7
+                              ,lr_insert_rcd.ATTRIBUTE8
+                              ,lr_insert_rcd.ATTRIBUTE9
+                              ,lr_insert_rcd.ATTRIBUTE10
+                              ,lr_insert_rcd.USER_JE_CATEGORY_NAME
+                              );
+      i := i+1;
+      --
+          UPDATE XXxx_GL_INTERFACE
+          SET PROCESSED_STATUS = 'P'
+          WHERE ROWID = lr_insert_rcd.ROW_ID;
+          --
+          COMMIT;
+      --
+
+      INSERT INTO GL_INTERFACE_CONTROL(je_source_name, status,
+                                       interface_run_id, group_id,
+                                       set_of_books_id, packet_id
+                                       )
+                                 VALUES
+                                      ('4', 'S',
+                                      IRUN_ID, V_group_id,
+                                      lr_insert_rcd.LEDGER_ID, NULL
+                                      );
+      COMMIT;
+
+     -- SRC_NAME := lr_insert_rcd.USER_JE_SOURCE_NAME;
+       BEGIN
+           SELECT GS.JE_SOURCE_NAME
+           INTO SRC_NAME
+           FROM  gl_je_sources GS
+           WHERE GS.user_je_source_name = lr_insert_rcd.USER_JE_SOURCE_NAME;
+          EXCEPTION
+            WHEN OTHERS THEN
+               SRC_NAME := NULL;
+          END;
+
+      ln_ledger_id := lr_insert_rcd.LEDGER_ID;
+
+    END LOOP;
+    print_msg('OUTPUT',CHR(10)||p_source||'- Transaction Date- '||lr_distinct_transaction.ACCOUNTING_DATE||' - Succesfully Inserted: '||i||' Records');
+    CLOSE cur_insert_rcd;
+    --
+    i := 0;
+    END LOOP;
+    CLOSE cur_distinct_transaction;
+    --FND_GLOBAL.APPS_INITIALIZE(1090,50567,101);
+    --
+    /*
+    IF i>0 THEN
+    --This will submit Concurrent Prog:"Program - Import Journal".
+
+    ln_request_id := FND_REQUEST.SUBMIT_REQUEST(
+                                                'SQLGL'
+                                               ,'GLLEZLSRS'
+                                               ,''
+                                               ,''
+                                               ,FALSE
+                                               ,1020
+                                               ,SRC_NAME
+                                               ,ln_ledger_id
+                                               ,''
+                                               ,'N'
+                                               ,'N'
+                                               ,'N'
+                                               );
+     COMMIT;
+
+    END IF;
+   */
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      x_err_buf := SQLERRM;
+      print_msg('LOG',CHR(10)||'Error in insert_record procedure'||x_err_buf);
+  END insert_record;
+-------------------End of Procedure insert_record-----------------------
+
+--+===================================================
+--| Procedure main which will call other Procedures   |
+--|===================================================|
+-- Procedure main which will call all other procedures and start the import process
+  -- +==============================================================================+
+  -- | Name        : main                                                           |
+  -- |                                                                              |
+  -- | Description : The procedure main will call all other procedures              |
+  -- |               and start the import process                                   |
+  -- |                                                                              |
+  -- | Parameters  : x_err_buf    OUT VARCHAR2                                      |
+  -- |               x_ret_code   OUT VARCHAR2                                      |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+
+  PROCEDURE main(x_err_buf   OUT VARCHAR2
+                ,x_ret_code  OUT VARCHAR2
+                ,p_source   IN  VARCHAR2
+                )
+  IS
+  BEGIN
+
+    --
+    validate_record(x_err_buf
+                   ,x_ret_code
+                   ,p_source
+                   );
+  --
+
+    insert_record(x_err_buf
+                 ,x_ret_code
+                 ,p_source
+                 );
+
+    --
+   /*
+    delete_record(x_err_buf
+                 ,x_ret_code
+                 );
+  */
+  EXCEPTION
+    WHEN OTHERS THEN
+      x_err_buf := 'Error has Ocurred in main procedure';
+      FND_FILE.PUT_LINE(FND_FILE.LOG,x_err_buf);
+  END main;
+  --
+  -- Procedure RUN which will call EXTRACT_RECORD AND MAIN
+  -- +==============================================================================+
+  -- | Name        : run                                                            |
+  -- |                                                                              |
+  -- | Description : The procedure run will call all main and extract_record        |
+  -- |               procedures                                                     |
+  -- |                                                                              |
+  -- | Parameters  : x_err_buf    OUT VARCHAR2                                      |
+  -- |               x_ret_code   OUT VARCHAR2                                      |
+  -- |                                                                              |
+  -- | Returns     : n/a                                                            |
+  -- |                                                                              |
+  -- |Ver.     Date         Author              Comments                            |
+  -- |====     ==========  ==================  ============================         |
+  -- |D1a                  Shashi gautam        Initial version.                     |
+  -- |                                                                              |
+  -- +==============================================================================+
+  --+=====================================================================
+  --|Submit Concurrent Program 'XXxx Custom Journal Import Run Program'|
+  --|to start Gl Interface Program                                       |
+  --+====================================================================|
+
+  PROCEDURE RUN(x_err_buf  OUT VARCHAR2
+               ,x_ret_code OUT VARCHAR2
+               ,p_file IN VARCHAR2
+               ,p_source   IN  VARCHAR2
+               )
+  IS
+  ln_request_id NUMBER;
+  lv_message VARCHAR2(100);
+  BEGIN
+    --
+    BEGIN
+    DELETE FROM XXxx_GL_INTERFACE
+    WHERE USER_JE_CATEGORY_NAME = p_source;
+    --
+    COMMIT;
+    EXCEPTION
+      WHEN OTHERS THEN
+        LV_MESSAGE := 'EXCEPTION';
+    END;
+
+    extract_record(x_err_buf
+                  ,x_ret_code
+                  ,p_file
+                  );
+
+    ln_request_id := FND_REQUEST.SUBMIT_REQUEST('SQLGL'
+                                               ,'xxGLINTERFACE'
+                                                ,''
+                                                ,''
+                                                ,FALSE
+                                                ,p_source
+                                                );
+    COMMIT;
+
+  END RUN;
+
+  END XXxx_GL_INT_PKG;
+/
